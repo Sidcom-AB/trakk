@@ -166,7 +166,8 @@
   background-repeat: no-repeat;
 }
 
-.timeline-editor-row-label:hover .timeline-editor-row-delete {
+.timeline-editor-row-label:hover .timeline-editor-row-delete,
+.timeline-editor-label-row:hover .timeline-editor-row-delete {
   opacity: 1;
 }
 

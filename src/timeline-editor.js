@@ -68,6 +68,8 @@ export class TimelineEditor extends HTMLElement {
     this.timeAreaEl = null;
     this.timeAreaWrapperEl = null;
     this.editAreaEl = null;
+    this.labelColumnEl = null;
+    this.labelInnerEl = null;
     this.cursorEl = null;
 
     // Engine
@@ -279,13 +281,30 @@ export class TimelineEditor extends HTMLElement {
   render() {
     this.innerHTML = '';
 
-    // Time area
+    // Time area (header row with ruler)
     this.timeAreaEl = this._createTimeArea();
     this.appendChild(this.timeAreaEl);
 
-    // Edit area
+    // Main content wrapper (labels + edit area side by side)
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'timeline-editor-content';
+    contentWrapper.style.cssText = `
+      display: flex;
+      flex: 1 1 auto;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    `;
+
+    // Frozen label column
+    this.labelColumnEl = this._createLabelColumn();
+    contentWrapper.appendChild(this.labelColumnEl);
+
+    // Edit area (scrollable)
     this.editAreaEl = this._createEditArea();
-    this.appendChild(this.editAreaEl);
+    contentWrapper.appendChild(this.editAreaEl);
+
+    this.appendChild(contentWrapper);
 
     // Cursor
     if (!this.config.hideCursor) {
@@ -297,6 +316,10 @@ export class TimelineEditor extends HTMLElement {
     if (this.scrollLeft > 0) {
       this.editAreaEl.scrollLeft = this.scrollLeft;
       this._syncTimeAreaScroll();
+    }
+    if (this.scrollTop > 0) {
+      this.editAreaEl.scrollTop = this.scrollTop;
+      this._syncLabelColumnScroll();
     }
     this._updateCursorPosition();
   }
@@ -385,13 +408,121 @@ export class TimelineEditor extends HTMLElement {
   }
 
   /**
+   * Create frozen label column
+   */
+  _createLabelColumn() {
+    const labelColumn = document.createElement('div');
+    labelColumn.className = 'timeline-editor-label-column';
+    labelColumn.style.cssText = `
+      width: ${this.config.startLeft}px;
+      flex-shrink: 0;
+      overflow: hidden;
+      background-color: #191b1d;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 10;
+      margin-top: 10px;
+      position: relative;
+    `;
+
+    // Inner container that will be transformed for scroll sync
+    const labelInner = document.createElement('div');
+    labelInner.className = 'timeline-editor-label-inner';
+    this.labelInnerEl = labelInner;
+
+    this.tracks.forEach((row, rowIndex) => {
+      const labelRow = this._createLabelRow(row, rowIndex);
+      labelInner.appendChild(labelRow);
+    });
+
+    labelColumn.appendChild(labelInner);
+    return labelColumn;
+  }
+
+  /**
+   * Create a label row (for frozen column)
+   */
+  _createLabelRow(row, rowIndex) {
+    const labelRow = document.createElement('div');
+    labelRow.className = 'timeline-editor-label-row';
+    labelRow.style.cssText = `
+      height: ${row.rowHeight || this.config.rowHeight}px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      font-weight: 500;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      box-sizing: border-box;
+      position: relative;
+    `;
+
+    if (rowIndex === 0) {
+      labelRow.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
+    }
+
+    labelRow.dataset.rowId = row.id;
+    labelRow.dataset.rowIndex = rowIndex;
+
+    // Label text
+    const labelText = document.createElement('span');
+    labelText.className = 'timeline-editor-label-text';
+    labelText.textContent = row.name || '';
+    labelText.style.cssText = `
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    `;
+    labelRow.appendChild(labelText);
+
+    // Make label editable on dblclick (unless locked)
+    if (!row.locked) {
+      labelRow.style.cursor = 'text';
+      labelRow.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this._startLabelEdit(labelRow, labelText, row);
+      });
+    }
+
+    // Show locked indicator
+    if (row.locked) {
+      const lockIcon = document.createElement('span');
+      lockIcon.className = 'timeline-editor-lock-icon';
+      lockIcon.style.cssText = `
+        width: 10px;
+        height: 10px;
+        margin-left: 6px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='rgba(255,255,255,0.4)'%3E%3Cpath d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z'/%3E%3C/svg%3E");
+        background-size: contain;
+        background-repeat: no-repeat;
+        flex-shrink: 0;
+      `;
+      labelRow.appendChild(lockIcon);
+    }
+
+    // Add delete button (unless noDelete is set)
+    if (!row.noDelete) {
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'timeline-editor-row-delete';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._deleteTrack(row);
+      });
+      labelRow.appendChild(deleteBtn);
+    }
+
+    return labelRow;
+  }
+
+  /**
    * Create edit area (rows and actions)
    */
   _createEditArea() {
     const editArea = document.createElement('div');
     editArea.className = 'timeline-editor-edit-area';
 
-    const totalWidth = this.config.scaleCount * this.config.scaleWidth + this.config.startLeft;
+    const totalWidth = this.config.scaleCount * this.config.scaleWidth;
 
     // Create rows container
     const rowsContainer = document.createElement('div');
@@ -405,11 +536,12 @@ export class TimelineEditor extends HTMLElement {
 
     editArea.appendChild(rowsContainer);
 
-    // Sync scroll with time area
+    // Sync scroll with time area and label column
     editArea.addEventListener('scroll', (e) => {
       this.scrollLeft = e.target.scrollLeft;
       this.scrollTop = e.target.scrollTop;
       this._syncTimeAreaScroll();
+      this._syncLabelColumnScroll();
       this._updateCursorPosition();
     });
 
@@ -417,7 +549,15 @@ export class TimelineEditor extends HTMLElement {
   }
 
   /**
-   * Create a row
+   * Sync label column scroll with edit area (vertical only)
+   */
+  _syncLabelColumnScroll() {
+    if (!this.labelInnerEl) return;
+    this.labelInnerEl.style.transform = `translateY(-${this.scrollTop}px)`;
+  }
+
+  /**
+   * Create a row (edit area only, no label - labels are in frozen column)
    */
   _createRow(row, rowIndex, totalWidth) {
     const rowEl = document.createElement('div');
@@ -425,52 +565,21 @@ export class TimelineEditor extends HTMLElement {
     rowEl.style.height = `${row.rowHeight || this.config.rowHeight}px`;
     rowEl.style.width = `${totalWidth}px`;
 
-    // Match background grid with major scale ticks (not subdivisions)
-    rowEl.style.backgroundSize = `${this.config.startLeft}px 100%, ${this.config.scaleWidth}px 100%`;
-    rowEl.style.backgroundPosition = `0 0, ${this.config.startLeft}px 0`;
+    // Match background grid with major scale ticks
+    rowEl.style.backgroundSize = `${this.config.scaleWidth}px 100%`;
+    rowEl.style.backgroundPosition = `0 0`;
+    rowEl.style.backgroundImage = `linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 0)`;
 
     rowEl.dataset.rowId = row.id;
     rowEl.dataset.rowIndex = rowIndex;
-
-    // Add row label
-    const label = document.createElement('div');
-    label.className = 'timeline-editor-row-label';
-    label.style.width = `${this.config.startLeft}px`;
-    label.textContent = row.name || '';
-
-    // Make label editable on dblclick (unless locked)
-    if (!row.locked) {
-      label.style.cursor = 'text';
-      label.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        this._startLabelEdit(label, row);
-      });
-    }
-
-    // Show locked indicator
-    if (row.locked) {
-      label.classList.add('timeline-editor-row-label-locked');
-    }
-
-    // Add delete button (unless noDelete is set)
-    if (!row.noDelete) {
-      const deleteBtn = document.createElement('div');
-      deleteBtn.className = 'timeline-editor-row-delete';
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._deleteTrack(row);
-      });
-      label.appendChild(deleteBtn);
-    }
-
-    rowEl.appendChild(label);
 
     // Click handler
     rowEl.addEventListener('click', (e) => {
       // Only if clicking directly on the row (not on an action)
       if (e.target === rowEl && this.callbacks.onClickRow) {
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft;
+        // Edit area starts at 0, add startLeft for correct time conversion
+        const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
         this.callbacks.onClickRow(e, { row, time });
       }
@@ -480,7 +589,8 @@ export class TimelineEditor extends HTMLElement {
     rowEl.addEventListener('dblclick', (e) => {
       if (e.target === rowEl && this.callbacks.onDoubleClickRow) {
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft;
+        // Edit area starts at 0, add startLeft for correct time conversion
+        const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
         this.callbacks.onDoubleClickRow(e, { row, time });
       }
@@ -491,7 +601,8 @@ export class TimelineEditor extends HTMLElement {
       if (e.target === rowEl && this.callbacks.onContextMenuRow) {
         e.preventDefault();
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft;
+        // Edit area starts at 0, add startLeft for correct time conversion
+        const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
         this.callbacks.onContextMenuRow(e, { row, time });
       }
@@ -518,8 +629,8 @@ export class TimelineEditor extends HTMLElement {
   /**
    * Start editing a track label
    */
-  _startLabelEdit(label, row) {
-    if (label.querySelector('input')) return; // Already editing
+  _startLabelEdit(labelRow, labelText, row) {
+    if (labelRow.querySelector('input')) return; // Already editing
 
     const currentName = row.name || '';
     const input = document.createElement('input');
@@ -527,7 +638,7 @@ export class TimelineEditor extends HTMLElement {
     input.value = currentName;
     input.className = 'timeline-editor-row-label-input';
     input.style.cssText = `
-      width: calc(100% - 16px);
+      flex: 1;
       background: transparent;
       border: none;
       border-bottom: 1px solid rgba(255,255,255,0.3);
@@ -535,12 +646,15 @@ export class TimelineEditor extends HTMLElement {
       font: inherit;
       outline: none;
       padding: 0;
+      user-select: text;
     `;
 
     const finishEdit = () => {
       const newName = input.value.trim();
       row.name = newName;
-      label.textContent = newName;
+      labelText.textContent = newName;
+      labelText.style.display = '';
+      input.remove();
 
       // Emit change event
       this.dispatchEvent(new CustomEvent('change', {
@@ -562,8 +676,8 @@ export class TimelineEditor extends HTMLElement {
       }
     });
 
-    label.textContent = '';
-    label.appendChild(input);
+    labelText.style.display = 'none';
+    labelRow.insertBefore(input, labelText);
     input.focus();
     input.select();
   }
@@ -692,12 +806,10 @@ export class TimelineEditor extends HTMLElement {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left + this.scrollLeft;
 
-    // Don't allow item creation in the label area (before startLeft)
-    if (x < this.config.startLeft) return;
-
     e.preventDefault();
 
-    const startTime = parserPixelToTime(x, this.config);
+    // Convert pixel to time (edit area starts at 0, so add startLeft offset for conversion)
+    const startTime = parserPixelToTime(x + this.config.startLeft, this.config);
 
     // Setup drag state for item creation
     this.dragState.isDragging = true;
@@ -728,8 +840,9 @@ export class TimelineEditor extends HTMLElement {
       actionEl.classList.add('selected');
     }
 
-    const left = parserTimeToPixel(action.start, this.config);
-    const width = parserTimeToPixel(action.end, this.config) - left;
+    // Edit area starts at 0 (label column is separate), so subtract startLeft
+    const left = parserTimeToPixel(action.start, this.config) - this.config.startLeft;
+    const width = parserTimeToPixel(action.end, this.config) - this.config.startLeft - left;
 
     actionEl.style.left = `${left}px`;
     actionEl.style.width = `${width}px`;
@@ -806,7 +919,8 @@ export class TimelineEditor extends HTMLElement {
     actionEl.addEventListener('click', (e) => {
       if (this.callbacks.onClickAction) {
         const rect = this.editAreaEl.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft;
+        // Edit area starts at 0, add startLeft for correct time conversion
+        const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
         this.callbacks.onClickAction(e, { action, row, time });
       }
@@ -819,7 +933,8 @@ export class TimelineEditor extends HTMLElement {
       // Allow callback to handle or prevent
       if (this.callbacks.onDoubleClickAction) {
         const rect = this.editAreaEl.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft;
+        // Edit area starts at 0, add startLeft for correct time conversion
+        const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
         const result = this.callbacks.onDoubleClickAction(e, { action, row, time });
         if (result === false) return;
@@ -836,7 +951,8 @@ export class TimelineEditor extends HTMLElement {
       if (this.callbacks.onContextMenuAction) {
         e.preventDefault();
         const rect = this.editAreaEl.getBoundingClientRect();
-        const x = e.clientX - rect.left + this.scrollLeft;
+        // Edit area starts at 0, add startLeft for correct time conversion
+        const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
         this.callbacks.onContextMenuAction(e, { action, row, time });
       }
@@ -871,8 +987,10 @@ export class TimelineEditor extends HTMLElement {
    */
   _updateCursorPosition() {
     if (!this.cursorEl) return;
+    // parserTimeToPixel includes startLeft, which now represents the label column width
+    // The cursor is positioned relative to the whole timeline including label column
     const left = parserTimeToPixel(this.cursorTime, this.config);
-    // Cursor position should be relative to viewport, accounting for scroll
+    // Cursor position relative to viewport, accounting for scroll
     this.cursorEl.style.left = `${left - this.scrollLeft}px`;
   }
 
@@ -1112,7 +1230,8 @@ export class TimelineEditor extends HTMLElement {
     if (!newItem) return;
 
     const rect = this.editAreaEl.getBoundingClientRect();
-    const x = e.clientX - rect.left + this.scrollLeft;
+    // Edit area starts at 0, add startLeft for correct time conversion
+    const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
     const currentTime = parserPixelToTime(x, this.config);
 
     // Determine start and end based on drag direction
@@ -1125,10 +1244,10 @@ export class TimelineEditor extends HTMLElement {
       newItem.end = startTime;
     }
 
-    // Update visual element
+    // Update visual element (subtract startLeft since edit area starts at 0)
     if (this.dragState.newItemEl) {
-      const left = parserTimeToPixel(newItem.start, this.config);
-      const width = parserTimeToPixel(newItem.end, this.config) - left;
+      const left = parserTimeToPixel(newItem.start, this.config) - this.config.startLeft;
+      const width = parserTimeToPixel(newItem.end, this.config) - this.config.startLeft - left;
       this.dragState.newItemEl.style.left = `${left}px`;
       this.dragState.newItemEl.style.width = `${Math.max(10, width)}px`;
     }
@@ -1228,7 +1347,8 @@ export class TimelineEditor extends HTMLElement {
   _handleCursorDrag(e) {
     if (!this.editAreaEl) return;
     const rect = this.editAreaEl.getBoundingClientRect();
-    const x = e.clientX - rect.left + this.scrollLeft;
+    // Edit area starts at 0, add startLeft for correct time conversion
+    const x = e.clientX - rect.left + this.scrollLeft + this.config.startLeft;
     const time = parserPixelToTime(x, this.config);
 
     // Callback
@@ -1405,8 +1525,9 @@ export class TimelineEditor extends HTMLElement {
     const actionEl = rowEl.querySelector(`[data-action-id="${action.id}"]`);
     if (!actionEl) return;
 
-    const left = parserTimeToPixel(action.start, this.config);
-    const width = parserTimeToPixel(action.end, this.config) - left;
+    // Edit area starts at 0 (label column is separate), so subtract startLeft
+    const left = parserTimeToPixel(action.start, this.config) - this.config.startLeft;
+    const width = parserTimeToPixel(action.end, this.config) - this.config.startLeft - left;
 
     actionEl.style.left = `${left}px`;
     actionEl.style.width = `${width}px`;
