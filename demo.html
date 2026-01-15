@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timeline Editor Demo</title>
+  <link rel="stylesheet" href="src/timeline.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #0d0e0f;
+      color: #ffffff;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      font-size: 28px;
+      font-weight: 600;
+    }
+
+    .controls {
+      background-color: #1a1b1e;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background-color: #2f3134;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      background-color: #3a3d40;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.primary {
+      background-color: #5297FF;
+      border-color: #5297FF;
+    }
+
+    button.primary:hover {
+      background-color: #4080e0;
+    }
+
+    .slider-control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 150px;
+    }
+
+    .slider-control label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .slider-control input[type="range"] {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #2f3134;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .slider-control input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #5297FF;
+      cursor: pointer;
+    }
+
+    .slider-control input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #5297FF;
+      cursor: pointer;
+      border: none;
+    }
+
+    .time-display {
+      background-color: #0d0e0f;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      margin-left: auto;
+    }
+
+    .timeline-container {
+      height: 400px;
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      resize: both;
+      border: 2px solid #2f3134;
+      position: relative;
+    }
+
+    .timeline-container::after {
+      content: '↔↕';
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    timeline-editor {
+      width: 100%;
+      height: 100%;
+    }
+
+    .info {
+      background-color: #1a1b1e;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .info h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .info p {
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .info ul {
+      margin-left: 20px;
+      margin-top: 10px;
+    }
+
+    .info li {
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.8;
+    }
+
+    .info code {
+      background-color: #0d0e0f;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #5297FF;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Timeline Editor - Vanilla JS Demo</h1>
+
+    <div class="controls">
+      <button id="playBtn" class="primary">▶ Play</button>
+      <button id="pauseBtn">⏸ Pause</button>
+      <button id="resetBtn">⏮ Reset</button>
+      <button id="addTrackBtn">+ Add Track</button>
+      <button id="saveBtn">Save</button>
+      <button id="loadBtn">Load</button>
+      <div class="slider-control">
+        <label for="scaleSlider">Scale: <span id="scaleValue">1.0</span>s</label>
+        <input type="range" id="scaleSlider" min="0.1" max="5" step="0.1" value="1">
+      </div>
+      <div class="time-display">
+        Time: <span id="timeDisplay">0.0</span>s
+      </div>
+    </div>
+
+    <div class="timeline-container">
+      <timeline-editor id="timeline"></timeline-editor>
+    </div>
+
+    <div class="info">
+      <h2>How to use:</h2>
+      <ul>
+        <li><strong>Play/Pause:</strong> Use the control buttons to start and stop timeline playback</li>
+        <li><strong>Move cursor:</strong> Click on the time ruler or drag the blue cursor line</li>
+        <li><strong>Create items:</strong> Click on empty space in any row to create a new timeline item</li>
+        <li><strong>Move items:</strong> Click and drag timeline blocks to move them in time</li>
+        <li><strong>Resize items:</strong> Drag the left or right edges of timeline blocks to resize them</li>
+        <li><strong>Scale slider:</strong> Adjust the scale to change time unit spacing (0.1s to 5s per unit)</li>
+        <li><strong>Add item button:</strong> Click "Add Item" to add a new item at current cursor time</li>
+        <li><strong>Save/Load:</strong> Save your timeline to browser storage or load previously saved timelines</li>
+        <li><strong>Export:</strong> Export timeline as JSON to console for backup or sharing</li>
+        <li><strong>Resize timeline:</strong> Drag the bottom-right corner of the timeline to resize it</li>
+      </ul>
+
+      <h2 style="margin-top: 20px;">Features:</h2>
+      <p>This is a vanilla JavaScript web component version of the React Timeline Editor. It includes:</p>
+      <ul>
+        <li>Timeline playback engine with effects system</li>
+        <li>Draggable and resizable action blocks</li>
+        <li>Interactive time cursor</li>
+        <li>Custom event system for animations</li>
+        <li>No React or framework dependencies</li>
+      </ul>
+    </div>
+  </div>
+
+  <script type="module">
+    import { TimelineEditor } from './src/timeline-editor.js';
+
+    // Get timeline element
+    const timeline = document.getElementById('timeline');
+    const timeDisplay = document.getElementById('timeDisplay');
+
+    // Define some sample effects
+    const effects = {
+      'effect1': {
+        id: 'effect1',
+        name: 'Fade In',
+        source: {
+          enter: ({ action, time }) => {
+            console.log('Fade In - Enter', action.id, time);
+          },
+          update: ({ action, time }) => {
+            const progress = (time - action.start) / (action.end - action.start);
+            console.log('Fade In - Update', action.id, progress.toFixed(2));
+          },
+          leave: ({ action, time }) => {
+            console.log('Fade In - Leave', action.id, time);
+          }
+        }
+      },
+      'effect2': {
+        id: 'effect2',
+        name: 'Scale Up',
+        source: {
+          enter: ({ action, time }) => {
+            console.log('Scale Up - Enter', action.id, time);
+          },
+          update: ({ action, time }) => {
+            const progress = (time - action.start) / (action.end - action.start);
+            console.log('Scale Up - Update', action.id, progress.toFixed(2));
+          },
+          leave: ({ action, time }) => {
+            console.log('Scale Up - Leave', action.id, time);
+          }
+        }
+      },
+      'effect3': {
+        id: 'effect3',
+        name: 'Move Right',
+        source: {
+          enter: ({ action, time }) => {
+            console.log('Move Right - Enter', action.id, time);
+          },
+          update: ({ action, time }) => {
+            const progress = (time - action.start) / (action.end - action.start);
+            console.log('Move Right - Update', action.id, progress.toFixed(2));
+          },
+          leave: ({ action, time }) => {
+            console.log('Move Right - Leave', action.id, time);
+          }
+        }
+      }
+    };
+
+    // Sample timeline data using new schema
+    const timelineData = [
+      {
+        id: 'row-1',
+        name: 'Track 1',
+        blocks: [
+          {
+            id: 'block-1',
+            name: 'Fade In',
+            start: 0,
+            end: 3,
+            metadata: { effectId: 'effect1' }
+          },
+          {
+            id: 'block-2',
+            name: 'Scale Up',
+            start: 5,
+            end: 8,
+            metadata: { effectId: 'effect2' }
+          }
+        ]
+      },
+      {
+        id: 'row-2',
+        name: 'Track 2 (locked)',
+        locked: true,
+        blocks: [
+          {
+            id: 'block-3',
+            name: 'Move Right',
+            start: 2,
+            end: 6,
+            metadata: { effectId: 'effect3' }
+          }
+        ]
+      },
+      {
+        id: 'row-3',
+        name: 'Audio',
+        noDelete: true,
+        blocks: [
+          {
+            id: 'block-4',
+            name: 'Background Music',
+            start: 7,
+            end: 12,
+            noDelete: true,
+            metadata: { effectId: 'effect1' }
+          }
+        ]
+      }
+    ];
+
+    // Initialize timeline
+    timeline.setData(timelineData);
+
+    // Set up callbacks
+    timeline.setCallbacks({
+      // Action callbacks
+      onActionMoveStart: ({ action, row }) => {
+        console.log('Action move started:', action.id);
+      },
+      onActionMoving: ({ action, row, start, end }) => {
+        console.log('Action moving:', action.id, 'to', start.toFixed(2), '-', end.toFixed(2));
+      },
+      onActionMoveEnd: ({ action, row }) => {
+        console.log('Action move ended:', action.id);
+      },
+      onActionResizeStart: ({ action, row, direction }) => {
+        console.log('Action resize started:', action.id, direction);
+      },
+      onActionResizing: ({ action, row, start, end }) => {
+        console.log('Action resizing:', action.id, start.toFixed(2), '-', end.toFixed(2));
+      },
+      onActionResizeEnd: ({ action, row }) => {
+        console.log('Action resize ended:', action.id);
+      },
+      onClickAction: (e, { action, row, time }) => {
+        console.log('Action clicked:', action.id, 'at time', time.toFixed(2));
+      },
+      onDoubleClickAction: (e, { action, row, time }) => {
+        console.log('Action double-clicked:', action.id);
+      },
+
+      // Row callbacks
+      onClickRow: (e, { row, time }) => {
+        console.log('Row clicked:', row.id, 'at time', time.toFixed(2));
+      },
+      onDoubleClickRow: (e, { row, time }) => {
+        console.log('Row double-clicked:', row.id, 'at time', time.toFixed(2));
+      },
+
+      // Cursor callbacks
+      onCursorDragStart: (e, { time }) => {
+        console.log('Cursor drag started at', time.toFixed(2));
+      },
+      onCursorDrag: (e, { time }) => {
+        // Called frequently during drag - you might want to throttle this
+      },
+      onCursorDragEnd: (e, { time }) => {
+        console.log('Cursor drag ended at', time.toFixed(2));
+      },
+
+      // Time area callback
+      onClickTimeArea: (e, { time }) => {
+        console.log('Time area clicked at', time.toFixed(2));
+      },
+
+      // Custom renderers
+      getScaleRender: (scale) => {
+        // Custom time scale rendering
+        return scale.toFixed(1) + 's';
+      },
+      getActionRender: (action, row) => {
+        // Custom action content rendering
+        // First check for new schema (name property), then fall back to old schema (effectId)
+        if (action.name) {
+          return `<strong>${action.name}</strong>`;
+        }
+        // Legacy support: lookup effect by effectId
+        if (action.effectId) {
+          const effect = effects[action.effectId];
+          return `<strong>${effect?.name || ''}</strong>`;
+        }
+        // No name or effectId - show empty
+        return '';
+      }
+    });
+
+    // Update time display
+    timeline.engine.on('setTimeByTick', ({ time }) => {
+      timeDisplay.textContent = time.toFixed(1);
+    });
+
+    timeline.engine.on('afterSetTime', ({ time }) => {
+      timeDisplay.textContent = time.toFixed(1);
+    });
+
+    // Control buttons
+    document.getElementById('playBtn').addEventListener('click', () => {
+      timeline.play({ autoEnd: true });
+    });
+
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      timeline.pause();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      timeline.pause();
+      timeline.setTime(0);
+    });
+
+    // Scale slider
+    const scaleSlider = document.getElementById('scaleSlider');
+    const scaleValue = document.getElementById('scaleValue');
+
+    scaleSlider.addEventListener('input', (e) => {
+      const newScale = parseFloat(e.target.value);
+      scaleValue.textContent = newScale.toFixed(1);
+      timeline.setConfig({ scale: newScale });
+    });
+
+    document.getElementById('addTrackBtn').addEventListener('click', () => {
+      const currentData = timeline.tracks;
+      const trackNum = currentData.length + 1;
+
+      currentData.push({
+        id: `row-${Date.now()}`,
+        name: `Track ${trackNum}`,
+        blocks: []
+      });
+
+      timeline.setData(currentData);
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const saved = timeline.saveToLocalStorage();
+      console.log(saved ? 'Timeline saved' : 'Failed to save');
+    });
+
+    document.getElementById('loadBtn').addEventListener('click', () => {
+      const loaded = timeline.loadFromLocalStorage();
+      console.log(loaded ? 'Timeline loaded' : 'No saved timeline found');
+    });
+
+    // Listen for changes
+    timeline.addEventListener('change', (e) => {
+      console.log('Timeline data changed:', e.detail.tracks);
+    });
+
+    // Listen for item created
+    timeline.addEventListener('itemcreated', (e) => {
+      console.log('New item created:', e.detail.item, 'in row:', e.detail.row);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1419 @@
+import { TimelineEngine } from './timeline-engine.js';
+
+/**
+ * Utility functions
+ */
+const parserTimeToPixel = (time, { startLeft, scale, scaleWidth }) => {
+  return (time / scale) * scaleWidth + startLeft;
+};
+
+const parserPixelToTime = (pixel, { startLeft, scale, scaleWidth }) => {
+  return ((pixel - startLeft) / scaleWidth) * scale;
+};
+
+/**
+ * Timeline Editor Web Component
+ */
+export class TimelineEditor extends HTMLElement {
+  constructor() {
+    super();
+
+    // Default configuration
+    this.config = {
+      scale: 1,
+      scaleWidth: 160,
+      scaleCount: 20,
+      scaleSplitCount: 10,
+      startLeft: 120,
+      minScaleCount: 20,
+      maxScaleCount: Infinity,
+      rowHeight: 32,
+      autoScroll: false,
+      hideCursor: false,
+      disableDrag: false,
+      gridSnap: true,
+      grid: 1
+    };
+
+    // Callback functions
+    this.callbacks = {
+      onActionMoveStart: null,
+      onActionMoving: null,
+      onActionMoveEnd: null,
+      onActionResizeStart: null,
+      onActionResizing: null,
+      onActionResizeEnd: null,
+      onClickRow: null,
+      onClickAction: null,
+      onDoubleClickRow: null,
+      onDoubleClickAction: null,
+      onContextMenuRow: null,
+      onContextMenuAction: null,
+      onCursorDragStart: null,
+      onCursorDrag: null,
+      onCursorDragEnd: null,
+      onClickTimeArea: null,
+      getActionRender: null,
+      getScaleRender: null
+    };
+
+    // State
+    this.tracks = [];
+    this.cursorTime = 0;
+    this.isPlaying = false;
+    this.scrollLeft = 0;
+    this.scrollTop = 0;
+
+    // DOM refs
+    this.timeAreaEl = null;
+    this.timeAreaWrapperEl = null;
+    this.editAreaEl = null;
+    this.cursorEl = null;
+
+    // Engine
+    this.engine = new TimelineEngine();
+
+    // Drag state
+    this.dragState = {
+      isDragging: false,
+      isActuallyDragging: false, // Only true after threshold
+      type: null,
+      action: null,
+      row: null,
+      rowIndex: null,
+      startX: 0,
+      startY: 0,
+      currentLeft: 0,
+      currentWidth: 0,
+      deltaX: 0,
+      totalDeltaX: 0 // Track total movement
+    };
+
+  }
+
+  connectedCallback() {
+    this.className = 'timeline-editor';
+    this.render();
+    this._setupEngineListeners();
+    this._setupResizeObserver();
+  }
+
+  disconnectedCallback() {
+    this.engine.pause();
+    this._cleanup();
+  }
+
+  _cleanup() {
+    document.removeEventListener('mousemove', this._boundHandleMouseMove);
+    document.removeEventListener('mouseup', this._boundHandleMouseUp);
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+    }
+  }
+
+  _setupResizeObserver() {
+    // Watch for container size changes
+    this._resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        // Re-render on resize to update layout
+        if (this.editAreaEl) {
+          this._updateCursorPosition();
+        }
+      }
+    });
+    this._resizeObserver.observe(this);
+  }
+
+  /**
+   * Set timeline data
+   */
+  setData(tracks) {
+    this.tracks = tracks || [];
+    this.engine.data = this.tracks;
+    this.render();
+  }
+
+  /**
+   * Update configuration
+   */
+  setConfig(newConfig) {
+    Object.assign(this.config, newConfig);
+    this.render();
+  }
+
+  /**
+   * Set callback functions
+   */
+  setCallbacks(callbacks) {
+    Object.assign(this.callbacks, callbacks);
+  }
+
+  /**
+   * Set a single callback
+   */
+  on(event, callback) {
+    if (this.callbacks.hasOwnProperty(event)) {
+      this.callbacks[event] = callback;
+    }
+  }
+
+  /**
+   * Get current timeline data (for export)
+   */
+  getData() {
+    return {
+      tracks: this.tracks
+    };
+  }
+
+  /**
+   * Export timeline to JSON string
+   */
+  exportJSON() {
+    return JSON.stringify(this.getData(), null, 2);
+  }
+
+  /**
+   * Import timeline from JSON string
+   */
+  importJSON(jsonString) {
+    try {
+      const data = JSON.parse(jsonString);
+      // Support both old (editorData) and new (tracks) formats
+      const tracks = data.tracks || data.editorData || [];
+      this.setData(tracks);
+      return true;
+    } catch (e) {
+      console.error('Failed to import timeline data:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Save to localStorage
+   */
+  saveToLocalStorage(key = 'timeline-data') {
+    try {
+      localStorage.setItem(key, this.exportJSON());
+      return true;
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Load from localStorage
+   */
+  loadFromLocalStorage(key = 'timeline-data') {
+    try {
+      const data = localStorage.getItem(key);
+      if (data) {
+        return this.importJSON(data);
+      }
+      return false;
+    } catch (e) {
+      console.error('Failed to load from localStorage:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Set current time
+   */
+  setTime(time) {
+    this.cursorTime = Math.max(0, time);
+    this.engine.setTime(this.cursorTime);
+    this._updateCursorPosition();
+  }
+
+  /**
+   * Get current time
+   */
+  getTime() {
+    return this.engine.getTime();
+  }
+
+  /**
+   * Play timeline
+   */
+  play(options = {}) {
+    return this.engine.play(options);
+  }
+
+  /**
+   * Pause timeline
+   */
+  pause() {
+    this.engine.pause();
+  }
+
+  /**
+   * Setup engine event listeners
+   */
+  _setupEngineListeners() {
+    this.engine.on('play', () => {
+      this.isPlaying = true;
+      this.classList.add('timeline-editor-playing');
+    });
+
+    this.engine.on('paused', () => {
+      this.isPlaying = false;
+      this.classList.remove('timeline-editor-playing');
+    });
+
+    this.engine.on('setTimeByTick', ({ time }) => {
+      this.cursorTime = time;
+      this._updateCursorPosition();
+    });
+
+    this.engine.on('afterSetTime', ({ time }) => {
+      this.cursorTime = time;
+      this._updateCursorPosition();
+    });
+  }
+
+  /**
+   * Render the timeline editor
+   */
+  render() {
+    this.innerHTML = '';
+
+    // Time area
+    this.timeAreaEl = this._createTimeArea();
+    this.appendChild(this.timeAreaEl);
+
+    // Edit area
+    this.editAreaEl = this._createEditArea();
+    this.appendChild(this.editAreaEl);
+
+    // Cursor
+    if (!this.config.hideCursor) {
+      this.cursorEl = this._createCursor();
+      this.appendChild(this.cursorEl);
+    }
+
+    // Restore scroll position and sync
+    if (this.scrollLeft > 0) {
+      this.editAreaEl.scrollLeft = this.scrollLeft;
+      this._syncTimeAreaScroll();
+    }
+    this._updateCursorPosition();
+  }
+
+  /**
+   * Create time area (ruler)
+   */
+  _createTimeArea() {
+    const timeArea = document.createElement('div');
+    timeArea.className = 'timeline-editor-time-area';
+
+    // Create a wrapper that will be scrolled
+    const wrapper = document.createElement('div');
+    wrapper.className = 'timeline-editor-time-area-wrapper';
+    const totalWidth = this.config.scaleCount * this.config.scaleWidth + this.config.startLeft;
+    wrapper.style.width = `${totalWidth}px`;
+    wrapper.style.height = '100%';
+    wrapper.style.position = 'relative';
+
+    const interact = document.createElement('div');
+    interact.className = 'timeline-editor-time-area-interact';
+    interact.style.width = `${totalWidth}px`;
+
+    // Calculate total number of tick marks including subdivisions
+    const totalTicks = this.config.scaleCount * this.config.scaleSplitCount;
+    const tickWidth = this.config.scaleWidth / this.config.scaleSplitCount;
+
+    for (let i = 0; i <= totalTicks; i++) {
+      const unit = document.createElement('div');
+      const isBig = i % this.config.scaleSplitCount === 0;
+      unit.className = `timeline-editor-time-unit ${isBig ? 'timeline-editor-time-unit-big' : ''}`;
+      unit.style.width = `${tickWidth}px`;
+
+      // Position first tick at startLeft (subtract tickWidth, add 1 for border)
+      if (i === 0) {
+        unit.style.marginLeft = `${this.config.startLeft - tickWidth + 1}px`;
+      }
+
+      if (isBig) {
+        const scale = document.createElement('div');
+        scale.className = 'timeline-editor-time-unit-scale';
+        const scaleValue = (i / this.config.scaleSplitCount) * this.config.scale;
+
+        // Use custom render if provided
+        if (this.callbacks.getScaleRender) {
+          const customContent = this.callbacks.getScaleRender(scaleValue);
+          if (typeof customContent === 'string') {
+            scale.innerHTML = customContent;
+          } else if (customContent instanceof HTMLElement) {
+            scale.innerHTML = '';
+            scale.appendChild(customContent);
+          }
+        } else {
+          scale.textContent = scaleValue.toFixed(1);
+        }
+
+        unit.appendChild(scale);
+      }
+
+      interact.appendChild(unit);
+    }
+
+    wrapper.appendChild(interact);
+    timeArea.appendChild(wrapper);
+
+    // Store wrapper reference for scroll sync
+    this.timeAreaWrapperEl = wrapper;
+
+    // Click handler for time area
+    timeArea.addEventListener('click', (e) => {
+      if (this.isPlaying) return;
+      const rect = timeArea.getBoundingClientRect();
+      const x = e.clientX - rect.left + this.scrollLeft;
+      const time = parserPixelToTime(x, this.config);
+
+      // Callback
+      if (this.callbacks.onClickTimeArea) {
+        const result = this.callbacks.onClickTimeArea(e, { time });
+        if (result === false) return;
+      }
+
+      this.setTime(Math.max(0, time));
+    });
+
+    return timeArea;
+  }
+
+  /**
+   * Create edit area (rows and actions)
+   */
+  _createEditArea() {
+    const editArea = document.createElement('div');
+    editArea.className = 'timeline-editor-edit-area';
+
+    const totalWidth = this.config.scaleCount * this.config.scaleWidth + this.config.startLeft;
+
+    // Create rows container
+    const rowsContainer = document.createElement('div');
+    rowsContainer.className = 'timeline-editor-rows';
+    rowsContainer.style.position = 'relative';
+
+    this.tracks.forEach((row, rowIndex) => {
+      const rowEl = this._createRow(row, rowIndex, totalWidth);
+      rowsContainer.appendChild(rowEl);
+    });
+
+    editArea.appendChild(rowsContainer);
+
+    // Sync scroll with time area
+    editArea.addEventListener('scroll', (e) => {
+      this.scrollLeft = e.target.scrollLeft;
+      this.scrollTop = e.target.scrollTop;
+      this._syncTimeAreaScroll();
+      this._updateCursorPosition();
+    });
+
+    return editArea;
+  }
+
+  /**
+   * Create a row
+   */
+  _createRow(row, rowIndex, totalWidth) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'timeline-editor-edit-row';
+    rowEl.style.height = `${row.rowHeight || this.config.rowHeight}px`;
+    rowEl.style.width = `${totalWidth}px`;
+
+    // Match background grid with major scale ticks (not subdivisions)
+    rowEl.style.backgroundSize = `${this.config.startLeft}px 100%, ${this.config.scaleWidth}px 100%`;
+    rowEl.style.backgroundPosition = `0 0, ${this.config.startLeft}px 0`;
+
+    rowEl.dataset.rowId = row.id;
+    rowEl.dataset.rowIndex = rowIndex;
+
+    // Add row label
+    const label = document.createElement('div');
+    label.className = 'timeline-editor-row-label';
+    label.style.width = `${this.config.startLeft}px`;
+    label.textContent = row.name || '';
+
+    // Make label editable on dblclick (unless locked)
+    if (!row.locked) {
+      label.style.cursor = 'text';
+      label.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this._startLabelEdit(label, row);
+      });
+    }
+
+    // Show locked indicator
+    if (row.locked) {
+      label.classList.add('timeline-editor-row-label-locked');
+    }
+
+    // Add delete button (unless noDelete is set)
+    if (!row.noDelete) {
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'timeline-editor-row-delete';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._deleteTrack(row);
+      });
+      label.appendChild(deleteBtn);
+    }
+
+    rowEl.appendChild(label);
+
+    // Click handler
+    rowEl.addEventListener('click', (e) => {
+      // Only if clicking directly on the row (not on an action)
+      if (e.target === rowEl && this.callbacks.onClickRow) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left + this.scrollLeft;
+        const time = parserPixelToTime(x, this.config);
+        this.callbacks.onClickRow(e, { row, time });
+      }
+    });
+
+    // Double-click handler
+    rowEl.addEventListener('dblclick', (e) => {
+      if (e.target === rowEl && this.callbacks.onDoubleClickRow) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left + this.scrollLeft;
+        const time = parserPixelToTime(x, this.config);
+        this.callbacks.onDoubleClickRow(e, { row, time });
+      }
+    });
+
+    // Context menu handler
+    rowEl.addEventListener('contextmenu', (e) => {
+      if (e.target === rowEl && this.callbacks.onContextMenuRow) {
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left + this.scrollLeft;
+        const time = parserPixelToTime(x, this.config);
+        this.callbacks.onContextMenuRow(e, { row, time });
+      }
+    });
+
+    // Add mousedown handler for creating new items via drag on empty space
+    rowEl.addEventListener('mousedown', (e) => {
+      // Only if clicking directly on the row (not on an action)
+      if (e.target === rowEl || e.target === rowEl.querySelector('.timeline-editor-row-label')) {
+        this._handleRowDragStart(e, row, rowIndex);
+      }
+    });
+
+    // Create items for this row (fallback to actions for backward compatibility)
+    const items = row.blocks || row.items || row.actions || [];
+    items.forEach((item) => {
+      const actionEl = this._createAction(item, row, rowIndex);
+      rowEl.appendChild(actionEl);
+    });
+
+    return rowEl;
+  }
+
+  /**
+   * Start editing a track label
+   */
+  _startLabelEdit(label, row) {
+    if (label.querySelector('input')) return; // Already editing
+
+    const currentName = row.name || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'timeline-editor-row-label-input';
+    input.style.cssText = `
+      width: calc(100% - 16px);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+      color: inherit;
+      font: inherit;
+      outline: none;
+      padding: 0;
+    `;
+
+    const finishEdit = () => {
+      const newName = input.value.trim();
+      row.name = newName;
+      label.textContent = newName;
+
+      // Emit change event
+      this.dispatchEvent(new CustomEvent('change', {
+        detail: { tracks: this.tracks }
+      }));
+      this.dispatchEvent(new CustomEvent('trackrenamed', {
+        detail: { track: row, name: newName }
+      }));
+    };
+
+    input.addEventListener('blur', finishEdit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = currentName;
+        input.blur();
+      }
+    });
+
+    label.textContent = '';
+    label.appendChild(input);
+    input.focus();
+    input.select();
+  }
+
+  /**
+   * Delete a track
+   */
+  _deleteTrack(row) {
+    // Remove from tracks array
+    const idx = this.tracks.indexOf(row);
+    if (idx > -1) {
+      this.tracks.splice(idx, 1);
+    }
+
+    // Re-render
+    this.render();
+
+    // Emit events
+    this.dispatchEvent(new CustomEvent('change', {
+      detail: { tracks: this.tracks }
+    }));
+    this.dispatchEvent(new CustomEvent('trackdeleted', {
+      detail: { track: row }
+    }));
+  }
+
+  /**
+   * Delete a block from a track
+   */
+  _deleteBlock(block, row) {
+    const blocks = row.blocks || row.items || row.actions || [];
+    const idx = blocks.indexOf(block);
+    if (idx > -1) {
+      blocks.splice(idx, 1);
+    }
+
+    // Re-render
+    this.render();
+
+    // Emit events
+    this.dispatchEvent(new CustomEvent('change', {
+      detail: { tracks: this.tracks }
+    }));
+    this.dispatchEvent(new CustomEvent('blockdeleted', {
+      detail: { block, track: row }
+    }));
+  }
+
+  /**
+   * Start editing a block name
+   */
+  _startBlockNameEdit(actionEl, block, row) {
+    const content = actionEl.querySelector('.timeline-editor-action-content');
+    if (!content || content.querySelector('input')) return; // Already editing
+
+    const currentName = block.name || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'timeline-editor-block-name-input';
+    input.style.cssText = `
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+      color: inherit;
+      font: inherit;
+      outline: none;
+      padding: 0;
+      text-align: center;
+      user-select: text;
+    `;
+
+    const finishEdit = () => {
+      const newName = input.value.trim();
+      block.name = newName;
+
+      // Update content display
+      if (this.callbacks.getActionRender) {
+        const customContent = this.callbacks.getActionRender(block, row);
+        if (typeof customContent === 'string') {
+          content.innerHTML = customContent;
+        }
+      } else {
+        content.textContent = newName;
+      }
+
+      // Emit change event
+      this.dispatchEvent(new CustomEvent('change', {
+        detail: { tracks: this.tracks }
+      }));
+      this.dispatchEvent(new CustomEvent('blockrenamed', {
+        detail: { block, track: row, name: newName }
+      }));
+    };
+
+    input.addEventListener('blur', finishEdit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        input.value = currentName;
+        input.blur();
+      }
+      e.stopPropagation();
+    });
+    input.addEventListener('mousedown', (e) => e.stopPropagation());
+    input.addEventListener('click', (e) => e.stopPropagation());
+
+    content.innerHTML = '';
+    content.appendChild(input);
+    input.focus();
+    input.select();
+  }
+
+  /**
+   * Handle drag start on empty row space to create new item
+   */
+  _handleRowDragStart(e, row, rowIndex) {
+    if (this.isPlaying || this.config.disableDrag || row.locked) return;
+
+    // Only left mouse button
+    if (e.button !== 0) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left + this.scrollLeft;
+
+    // Don't allow item creation in the label area (before startLeft)
+    if (x < this.config.startLeft) return;
+
+    e.preventDefault();
+
+    const startTime = parserPixelToTime(x, this.config);
+
+    // Setup drag state for item creation
+    this.dragState.isDragging = true;
+    this.dragState.isActuallyDragging = false;
+    this.dragState.type = 'item-create';
+    this.dragState.row = row;
+    this.dragState.rowIndex = rowIndex;
+    this.dragState.startX = e.clientX;
+    this.dragState.startTime = startTime;
+    this.dragState.totalDeltaX = 0;
+    this.dragState.newItem = null;
+    this.dragState.newItemEl = null;
+
+    this._boundHandleMouseMove = this._handleMouseMove.bind(this);
+    this._boundHandleMouseUp = this._handleMouseUp.bind(this);
+
+    document.addEventListener('mousemove', this._boundHandleMouseMove);
+    document.addEventListener('mouseup', this._boundHandleMouseUp);
+  }
+
+  /**
+   * Create an action element
+   */
+  _createAction(action, row, rowIndex) {
+    const actionEl = document.createElement('div');
+    actionEl.className = 'timeline-editor-action';
+    if (action.selected) {
+      actionEl.classList.add('selected');
+    }
+
+    const left = parserTimeToPixel(action.start, this.config);
+    const width = parserTimeToPixel(action.end, this.config) - left;
+
+    actionEl.style.left = `${left}px`;
+    actionEl.style.width = `${width}px`;
+    actionEl.dataset.actionId = action.id;
+    actionEl.dataset.rowIndex = rowIndex;
+
+    // Content
+    const content = document.createElement('div');
+    content.className = 'timeline-editor-action-content';
+
+    // Use custom render if provided
+    if (this.callbacks.getActionRender) {
+      const customContent = this.callbacks.getActionRender(action, row);
+      if (typeof customContent === 'string') {
+        content.innerHTML = customContent;
+      } else if (customContent instanceof HTMLElement) {
+        content.innerHTML = '';
+        content.appendChild(customContent);
+      }
+    } else {
+      // Display block name - only show if explicitly set (non-empty string)
+      // Don't fall back to id as that creates ugly display
+      content.textContent = action.name || '';
+    }
+    actionEl.appendChild(content);
+
+    // Resize handles (only if not locked)
+    if (action.flexible !== false && !row.locked) {
+      const leftStretch = document.createElement('div');
+      leftStretch.className = 'timeline-editor-action-left-stretch';
+      actionEl.appendChild(leftStretch);
+
+      const rightStretch = document.createElement('div');
+      rightStretch.className = 'timeline-editor-action-right-stretch';
+      actionEl.appendChild(rightStretch);
+
+      leftStretch.addEventListener('mousedown', (e) => this._handleResizeStart(e, action, row, rowIndex, 'left'));
+      rightStretch.addEventListener('mousedown', (e) => this._handleResizeStart(e, action, row, rowIndex, 'right'));
+    }
+
+    // Add drag listener for moving (only if not locked)
+    if (action.movable !== false && !row.locked) {
+      actionEl.addEventListener('mousedown', (e) => {
+        // Ignore if clicking on resize handles
+        if (e.target.classList.contains('timeline-editor-action-left-stretch') ||
+            e.target.classList.contains('timeline-editor-action-right-stretch')) {
+          return;
+        }
+        this._handleMoveStart(e, action, row, rowIndex);
+      });
+    }
+
+    // Visual indicator for locked track
+    if (row.locked) {
+      actionEl.classList.add('timeline-editor-action-locked');
+      actionEl.style.cursor = 'default';
+    }
+
+    // Add delete button for block (unless noDelete is set on block or track is locked)
+    if (!action.noDelete && !row.locked) {
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'timeline-editor-action-delete';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._deleteBlock(action, row);
+      });
+      deleteBtn.addEventListener('mousedown', (e) => {
+        e.stopPropagation(); // Prevent drag start
+      });
+      actionEl.appendChild(deleteBtn);
+    }
+
+    // Click event
+    actionEl.addEventListener('click', (e) => {
+      if (this.callbacks.onClickAction) {
+        const rect = this.editAreaEl.getBoundingClientRect();
+        const x = e.clientX - rect.left + this.scrollLeft;
+        const time = parserPixelToTime(x, this.config);
+        this.callbacks.onClickAction(e, { action, row, time });
+      }
+    });
+
+    // Double-click event - edit block name (unless locked)
+    actionEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+
+      // Allow callback to handle or prevent
+      if (this.callbacks.onDoubleClickAction) {
+        const rect = this.editAreaEl.getBoundingClientRect();
+        const x = e.clientX - rect.left + this.scrollLeft;
+        const time = parserPixelToTime(x, this.config);
+        const result = this.callbacks.onDoubleClickAction(e, { action, row, time });
+        if (result === false) return;
+      }
+
+      // Start editing block name (unless track is locked)
+      if (!row.locked) {
+        this._startBlockNameEdit(actionEl, action, row);
+      }
+    });
+
+    // Context menu event
+    actionEl.addEventListener('contextmenu', (e) => {
+      if (this.callbacks.onContextMenuAction) {
+        e.preventDefault();
+        const rect = this.editAreaEl.getBoundingClientRect();
+        const x = e.clientX - rect.left + this.scrollLeft;
+        const time = parserPixelToTime(x, this.config);
+        this.callbacks.onContextMenuAction(e, { action, row, time });
+      }
+    });
+
+    return actionEl;
+  }
+
+  /**
+   * Create cursor
+   */
+  _createCursor() {
+    const cursor = document.createElement('div');
+    cursor.className = 'timeline-editor-cursor';
+
+    const cursorTop = document.createElement('div');
+    cursorTop.className = 'timeline-editor-cursor-top';
+    cursor.appendChild(cursorTop);
+
+    const cursorArea = document.createElement('div');
+    cursorArea.className = 'timeline-editor-cursor-area';
+    cursor.appendChild(cursorArea);
+
+    // Cursor drag
+    cursorArea.addEventListener('mousedown', (e) => this._handleCursorDragStart(e));
+
+    return cursor;
+  }
+
+  /**
+   * Update cursor position
+   */
+  _updateCursorPosition() {
+    if (!this.cursorEl) return;
+    const left = parserTimeToPixel(this.cursorTime, this.config);
+    // Cursor position should be relative to viewport, accounting for scroll
+    this.cursorEl.style.left = `${left - this.scrollLeft}px`;
+  }
+
+  /**
+   * Sync time area scroll with edit area
+   */
+  _syncTimeAreaScroll() {
+    if (!this.timeAreaWrapperEl) {
+      // Fallback: try to find wrapper if reference is lost
+      this.timeAreaWrapperEl = this.timeAreaEl?.querySelector('.timeline-editor-time-area-wrapper');
+    }
+    if (!this.timeAreaWrapperEl) return;
+    this.timeAreaWrapperEl.style.transform = `translateX(-${this.scrollLeft}px)`;
+  }
+
+  /**
+   * Handle cursor drag start
+   */
+  _handleCursorDragStart(e) {
+    if (this.isPlaying || this.config.disableDrag) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Callback
+    if (this.callbacks.onCursorDragStart) {
+      const result = this.callbacks.onCursorDragStart(e, { time: this.cursorTime });
+      if (result === false) return;
+    }
+
+    this.dragState.isDragging = true;
+    this.dragState.type = 'cursor';
+    this.dragState.startX = e.clientX;
+
+    this._boundHandleMouseMove = this._handleMouseMove.bind(this);
+    this._boundHandleMouseUp = this._handleMouseUp.bind(this);
+
+    document.addEventListener('mousemove', this._boundHandleMouseMove);
+    document.addEventListener('mouseup', this._boundHandleMouseUp);
+  }
+
+  /**
+   * Handle action move start
+   */
+  _handleMoveStart(e, action, row, rowIndex) {
+    if (this.isPlaying || this.config.disableDrag) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    this.dragState.isDragging = true;
+    this.dragState.isActuallyDragging = false;
+    this.dragState.type = 'action-move';
+    this.dragState.action = action;
+    this.dragState.row = row;
+    this.dragState.rowIndex = rowIndex;
+    this.dragState.startX = e.clientX;
+    this.dragState.deltaX = 0;
+    this.dragState.totalDeltaX = 0;
+    this.dragState.currentLeft = parserTimeToPixel(action.start, this.config);
+    this.dragState.currentWidth = parserTimeToPixel(action.end, this.config) - this.dragState.currentLeft;
+
+    this._boundHandleMouseMove = this._handleMouseMove.bind(this);
+    this._boundHandleMouseUp = this._handleMouseUp.bind(this);
+
+    document.addEventListener('mousemove', this._boundHandleMouseMove);
+    document.addEventListener('mouseup', this._boundHandleMouseUp);
+  }
+
+  /**
+   * Handle action resize start
+   */
+  _handleResizeStart(e, action, row, rowIndex, direction) {
+    if (this.isPlaying || this.config.disableDrag) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    this.dragState.isDragging = true;
+    this.dragState.isActuallyDragging = false;
+    this.dragState.type = `action-resize-${direction}`;
+    this.dragState.action = action;
+    this.dragState.row = row;
+    this.dragState.rowIndex = rowIndex;
+    this.dragState.startX = e.clientX;
+    this.dragState.deltaX = 0;
+    this.dragState.totalDeltaX = 0;
+    this.dragState.currentLeft = parserTimeToPixel(action.start, this.config);
+    this.dragState.currentWidth = parserTimeToPixel(action.end, this.config) - this.dragState.currentLeft;
+
+    this._boundHandleMouseMove = this._handleMouseMove.bind(this);
+    this._boundHandleMouseUp = this._handleMouseUp.bind(this);
+
+    document.addEventListener('mousemove', this._boundHandleMouseMove);
+    document.addEventListener('mouseup', this._boundHandleMouseUp);
+  }
+
+  /**
+   * Handle mouse move (unified for all drag types)
+   */
+  _handleMouseMove(e) {
+    if (!this.dragState.isDragging) return;
+
+    if (this.dragState.type === 'cursor') {
+      this._handleCursorDrag(e);
+    } else if (this.dragState.type === 'action-move') {
+      const dx = e.clientX - this.dragState.startX;
+      this.dragState.startX = e.clientX;
+      this.dragState.deltaX += dx;
+      this.dragState.totalDeltaX += Math.abs(dx);
+
+      // Only trigger callback after moving 3px (threshold)
+      if (!this.dragState.isActuallyDragging && this.dragState.totalDeltaX > 3) {
+        this.dragState.isActuallyDragging = true;
+
+        // Trigger callback now that we're actually dragging
+        if (this.callbacks.onActionMoveStart) {
+          const result = this.callbacks.onActionMoveStart({
+            action: this.dragState.action,
+            row: this.dragState.row
+          });
+          if (result === false) {
+            this._cancelDrag();
+            return;
+          }
+        }
+      }
+
+      if (this.dragState.isActuallyDragging) {
+        this._handleActionMove();
+      }
+    } else if (this.dragState.type === 'action-resize-left') {
+      const dx = e.clientX - this.dragState.startX;
+      this.dragState.startX = e.clientX;
+      this.dragState.deltaX += dx;
+      this.dragState.totalDeltaX += Math.abs(dx);
+
+      // Only trigger callback after moving 3px
+      if (!this.dragState.isActuallyDragging && this.dragState.totalDeltaX > 3) {
+        this.dragState.isActuallyDragging = true;
+
+        if (this.callbacks.onActionResizeStart) {
+          const result = this.callbacks.onActionResizeStart({
+            action: this.dragState.action,
+            row: this.dragState.row,
+            direction: 'left'
+          });
+          if (result === false) {
+            this._cancelDrag();
+            return;
+          }
+        }
+      }
+
+      if (this.dragState.isActuallyDragging) {
+        this._handleActionResizeLeft();
+      }
+    } else if (this.dragState.type === 'action-resize-right') {
+      const dx = e.clientX - this.dragState.startX;
+      this.dragState.startX = e.clientX;
+      this.dragState.deltaX += dx;
+      this.dragState.totalDeltaX += Math.abs(dx);
+
+      // Only trigger callback after moving 3px
+      if (!this.dragState.isActuallyDragging && this.dragState.totalDeltaX > 3) {
+        this.dragState.isActuallyDragging = true;
+
+        if (this.callbacks.onActionResizeStart) {
+          const result = this.callbacks.onActionResizeStart({
+            action: this.dragState.action,
+            row: this.dragState.row,
+            direction: 'right'
+          });
+          if (result === false) {
+            this._cancelDrag();
+            return;
+          }
+        }
+      }
+
+      if (this.dragState.isActuallyDragging) {
+        this._handleActionResizeRight();
+      }
+    } else if (this.dragState.type === 'item-create') {
+      const dx = e.clientX - this.dragState.startX;
+      this.dragState.totalDeltaX += Math.abs(dx - (this.dragState.lastDx || 0));
+      this.dragState.lastDx = dx;
+
+      // Only create item after moving 3px (threshold)
+      if (!this.dragState.isActuallyDragging && this.dragState.totalDeltaX > 3) {
+        this.dragState.isActuallyDragging = true;
+        this._createNewItemFromDrag();
+      }
+
+      if (this.dragState.isActuallyDragging && this.dragState.newItem) {
+        this._updateNewItemFromDrag(e);
+      }
+    }
+  }
+
+  /**
+   * Create new block when drag threshold is reached
+   */
+  _createNewItemFromDrag() {
+    const row = this.dragState.row;
+    const rowIndex = this.dragState.rowIndex;
+    const startTime = Math.max(0, this.dragState.startTime);
+
+    // Create new block with minimal duration (will expand as user drags)
+    const newBlock = {
+      id: `block-${Date.now()}`,
+      name: '',
+      start: startTime,
+      end: startTime + 0.1, // Minimal initial duration
+      flexible: true,
+      movable: true,
+      metadata: {}
+    };
+
+    // Add to row data (ensure blocks array exists)
+    if (!row.blocks) row.blocks = [];
+    row.blocks.push(newBlock);
+    this.dragState.newItem = newBlock;
+
+    // Create and append the visual element
+    const rowEl = this.editAreaEl.querySelector(`[data-row-index="${rowIndex}"]`);
+    if (rowEl) {
+      const actionEl = this._createAction(newBlock, row, rowIndex);
+      actionEl.classList.add('creating');
+      rowEl.appendChild(actionEl);
+      this.dragState.newItemEl = actionEl;
+    }
+  }
+
+  /**
+   * Update new item size as user drags
+   */
+  _updateNewItemFromDrag(e) {
+    const newItem = this.dragState.newItem;
+    if (!newItem) return;
+
+    const rect = this.editAreaEl.getBoundingClientRect();
+    const x = e.clientX - rect.left + this.scrollLeft;
+    const currentTime = parserPixelToTime(x, this.config);
+
+    // Determine start and end based on drag direction
+    const startTime = this.dragState.startTime;
+    if (currentTime > startTime) {
+      newItem.start = Math.max(0, startTime);
+      newItem.end = currentTime;
+    } else {
+      newItem.start = Math.max(0, currentTime);
+      newItem.end = startTime;
+    }
+
+    // Update visual element
+    if (this.dragState.newItemEl) {
+      const left = parserTimeToPixel(newItem.start, this.config);
+      const width = parserTimeToPixel(newItem.end, this.config) - left;
+      this.dragState.newItemEl.style.left = `${left}px`;
+      this.dragState.newItemEl.style.width = `${Math.max(10, width)}px`;
+    }
+  }
+
+  /**
+   * Handle mouse up (unified)
+   */
+  _handleMouseUp(e) {
+    if (!this.dragState.isDragging) return;
+
+    const dragType = this.dragState.type;
+    const action = this.dragState.action;
+    const row = this.dragState.row;
+    const wasActuallyDragging = this.dragState.isActuallyDragging;
+
+    // Only trigger end callbacks if we actually dragged (past threshold)
+    if (wasActuallyDragging) {
+      // End callbacks
+      if (dragType === 'cursor' && this.callbacks.onCursorDragEnd) {
+        this.callbacks.onCursorDragEnd(e, { time: this.cursorTime });
+      } else if (dragType === 'action-move' && this.callbacks.onActionMoveEnd) {
+        this.callbacks.onActionMoveEnd({ action, row });
+      } else if ((dragType === 'action-resize-left' || dragType === 'action-resize-right') && this.callbacks.onActionResizeEnd) {
+        this.callbacks.onActionResizeEnd({ action, row });
+      } else if (dragType === 'item-create' && this.dragState.newItem) {
+        // Finalize item creation
+        const newItem = this.dragState.newItem;
+        if (this.dragState.newItemEl) {
+          this.dragState.newItemEl.classList.remove('creating');
+        }
+
+        // Emit events
+        this.dispatchEvent(new CustomEvent('change', {
+          detail: { tracks: this.tracks }
+        }));
+        this.dispatchEvent(new CustomEvent('itemcreated', {
+          detail: { item: newItem, row: row }
+        }));
+      }
+
+      if (dragType && dragType.startsWith('action-')) {
+        // Emit change event only if we actually moved/resized
+        this.dispatchEvent(new CustomEvent('change', {
+          detail: { tracks: this.tracks }
+        }));
+      }
+    } else if (dragType === 'item-create' && this.dragState.newItem) {
+      // User didn't drag enough - remove the item
+      const row = this.dragState.row;
+      const newItem = this.dragState.newItem;
+      const items = row.blocks || row.items || row.actions || [];
+      const idx = items.indexOf(newItem);
+      if (idx > -1) {
+        items.splice(idx, 1);
+      }
+      if (this.dragState.newItemEl) {
+        this.dragState.newItemEl.remove();
+      }
+    }
+
+    this.dragState.isDragging = false;
+    this.dragState.isActuallyDragging = false;
+    this.dragState.type = null;
+    this.dragState.action = null;
+    this.dragState.row = null;
+    this.dragState.totalDeltaX = 0;
+    this.dragState.newItem = null;
+    this.dragState.newItemEl = null;
+    this.dragState.lastDx = 0;
+
+    document.removeEventListener('mousemove', this._boundHandleMouseMove);
+    document.removeEventListener('mouseup', this._boundHandleMouseUp);
+  }
+
+  /**
+   * Cancel drag operation
+   */
+  _cancelDrag() {
+    this.dragState.isDragging = false;
+    this.dragState.isActuallyDragging = false;
+    this.dragState.type = null;
+    this.dragState.action = null;
+    this.dragState.row = null;
+    this.dragState.totalDeltaX = 0;
+    this.dragState.newItem = null;
+    this.dragState.newItemEl = null;
+    this.dragState.lastDx = 0;
+
+    document.removeEventListener('mousemove', this._boundHandleMouseMove);
+    document.removeEventListener('mouseup', this._boundHandleMouseUp);
+  }
+
+  /**
+   * Handle cursor drag
+   */
+  _handleCursorDrag(e) {
+    if (!this.editAreaEl) return;
+    const rect = this.editAreaEl.getBoundingClientRect();
+    const x = e.clientX - rect.left + this.scrollLeft;
+    const time = parserPixelToTime(x, this.config);
+
+    // Callback
+    if (this.callbacks.onCursorDrag) {
+      const result = this.callbacks.onCursorDrag(e, { time });
+      if (result === false) return;
+    }
+
+    this.setTime(Math.max(0, time));
+  }
+
+  /**
+   * Handle action move
+   */
+  _handleActionMove() {
+    const action = this.dragState.action;
+    const row = this.dragState.row;
+    const grid = this.config.gridSnap ? this.config.scaleWidth / 10 : 1;
+
+    // Only apply when accumulated delta exceeds grid
+    if (Math.abs(this.dragState.deltaX) >= grid) {
+      const count = parseInt(this.dragState.deltaX / grid);
+      let newLeft = this.dragState.currentLeft + count * grid;
+
+      // Apply grid snapping
+      if (this.config.gridSnap) {
+        const gridOffset = (newLeft - this.config.startLeft) % grid;
+        if (gridOffset !== 0) {
+          newLeft = this.config.startLeft + grid * Math.round((newLeft - this.config.startLeft) / grid);
+        }
+      }
+
+      // Bounds check
+      newLeft = Math.max(this.config.startLeft, newLeft);
+
+      // Update current position
+      this.dragState.currentLeft = newLeft;
+      this.dragState.deltaX = this.dragState.deltaX % grid;
+
+      const startTime = parserPixelToTime(newLeft, this.config);
+      const duration = action.end - action.start;
+
+      // Callback
+      if (this.callbacks.onActionMoving) {
+        const result = this.callbacks.onActionMoving({
+          action,
+          row,
+          start: startTime,
+          end: startTime + duration
+        });
+        if (result === false) return;
+      }
+
+      action.start = startTime;
+      action.end = startTime + duration;
+
+      this._updateActionElement(action, this.dragState.rowIndex);
+    }
+  }
+
+  /**
+   * Handle action resize left
+   */
+  _handleActionResizeLeft() {
+    const action = this.dragState.action;
+    const row = this.dragState.row;
+    const grid = this.config.gridSnap ? this.config.scaleWidth / 10 : 1;
+
+    // Only apply when accumulated delta exceeds grid
+    if (Math.abs(this.dragState.deltaX) >= grid) {
+      const count = parseInt(this.dragState.deltaX / grid);
+      let newLeft = this.dragState.currentLeft + count * grid;
+
+      // Apply grid snapping
+      if (this.config.gridSnap) {
+        const gridOffset = (newLeft - this.config.startLeft) % grid;
+        if (gridOffset !== 0) {
+          newLeft = this.config.startLeft + grid * Math.round((newLeft - this.config.startLeft) / grid);
+        }
+      }
+
+      // Keep right edge fixed
+      const rightEdge = this.dragState.currentLeft + this.dragState.currentWidth;
+
+      // Minimum width and bounds
+      newLeft = Math.max(this.config.startLeft, newLeft);
+      const minWidth = 10;
+      newLeft = Math.min(newLeft, rightEdge - minWidth);
+
+      const newWidth = rightEdge - newLeft;
+
+      // Update state
+      this.dragState.currentLeft = newLeft;
+      this.dragState.currentWidth = newWidth;
+      this.dragState.deltaX = this.dragState.deltaX % grid;
+
+      const startTime = parserPixelToTime(newLeft, this.config);
+
+      // Callback
+      if (this.callbacks.onActionResizing) {
+        const result = this.callbacks.onActionResizing({
+          action,
+          row,
+          start: Math.max(0, startTime),
+          end: action.end
+        });
+        if (result === false) return;
+      }
+
+      action.start = Math.max(0, startTime);
+
+      this._updateActionElement(action, this.dragState.rowIndex);
+    }
+  }
+
+  /**
+   * Handle action resize right
+   */
+  _handleActionResizeRight() {
+    const action = this.dragState.action;
+    const row = this.dragState.row;
+    const grid = this.config.gridSnap ? this.config.scaleWidth / 10 : 1;
+
+    // Only apply when accumulated delta exceeds grid
+    if (Math.abs(this.dragState.deltaX) >= grid) {
+      const count = parseInt(this.dragState.deltaX / grid);
+      let newWidth = this.dragState.currentWidth + count * grid;
+
+      // Apply grid snapping to right edge
+      const rightPos = this.dragState.currentLeft + newWidth;
+      if (this.config.gridSnap) {
+        const gridOffset = (rightPos - this.config.startLeft) % grid;
+        if (gridOffset !== 0) {
+          const snappedRight = this.config.startLeft + grid * Math.round((rightPos - this.config.startLeft) / grid);
+          newWidth = snappedRight - this.dragState.currentLeft;
+        }
+      }
+
+      // Minimum width
+      const minWidth = 10;
+      newWidth = Math.max(minWidth, newWidth);
+
+      // Update state
+      this.dragState.currentWidth = newWidth;
+      this.dragState.deltaX = this.dragState.deltaX % grid;
+
+      const endPixel = this.dragState.currentLeft + newWidth;
+      const endTime = parserPixelToTime(endPixel, this.config);
+
+      // Callback
+      if (this.callbacks.onActionResizing) {
+        const result = this.callbacks.onActionResizing({
+          action,
+          row,
+          start: action.start,
+          end: Math.max(action.start + 0.1, endTime)
+        });
+        if (result === false) return;
+      }
+
+      action.end = Math.max(action.start + 0.1, endTime);
+
+      this._updateActionElement(action, this.dragState.rowIndex);
+    }
+  }
+
+  /**
+   * Update action element visually
+   */
+  _updateActionElement(action, rowIndex) {
+    const rowEl = this.editAreaEl.querySelector(`[data-row-index="${rowIndex}"]`);
+    if (!rowEl) return;
+
+    const actionEl = rowEl.querySelector(`[data-action-id="${action.id}"]`);
+    if (!actionEl) return;
+
+    const left = parserTimeToPixel(action.start, this.config);
+    const width = parserTimeToPixel(action.end, this.config) - left;
+
+    actionEl.style.left = `${left}px`;
+    actionEl.style.width = `${width}px`;
+  }
+}
+
+// Register the custom element
+if (!customElements.get('timeline-editor')) {
+  customElements.define('timeline-editor', TimelineEditor);
+}
