@@ -291,6 +291,8 @@ export class TimelineEditor extends HTMLElement {
     this.engine.on('play', () => {
       this.isPlaying = true;
       this.classList.add('timeline-editor-playing');
+      // Jump to cursor immediately when play starts (not gradual scroll)
+      this._scrollToCursorImmediate();
     });
 
     this.engine.on('paused', () => {
@@ -878,15 +880,14 @@ export class TimelineEditor extends HTMLElement {
     // Only left mouse button
     if (e.button !== 0) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left + this._scrollX;
-
     e.preventDefault();
 
-    // Content padding offset
+    // Use editAreaEl for consistent coordinate calculation (same as _updateNewItemFromDrag)
+    const rect = this.editAreaEl.getBoundingClientRect();
     const contentPadding = this.config.contentPadding;
-    // Convert pixel to time (edit area starts at 0, account for contentPadding, add startLeft for conversion)
-    const startTime = parserPixelToTime(x - contentPadding + this.config.startLeft, this.config);
+    // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion
+    const x = e.clientX - rect.left + this._scrollX - contentPadding + this.config.startLeft;
+    const startTime = parserPixelToTime(x, this.config);
 
     // Setup drag state for item creation
     this.dragState.isDragging = true;
@@ -1078,6 +1079,29 @@ export class TimelineEditor extends HTMLElement {
     // Auto-scroll to keep cursor visible (only when explicitly requested, e.g. during playback)
     if (shouldAutoScroll && this.config.autoScroll && this.editAreaEl) {
       this._autoScrollToCursor(left);
+    }
+  }
+
+  /**
+   * Scroll to cursor immediately (no gradual scroll) - used when play starts
+   */
+  _scrollToCursorImmediate() {
+    if (!this.editAreaEl || !this.config.autoScroll) return;
+
+    const contentPadding = this.config.contentPadding;
+    const cursorLeft = parserTimeToPixel(this.cursorTime, this.config) + contentPadding;
+    const editAreaWidth = this.editAreaEl.clientWidth;
+    const cursorInEditArea = cursorLeft - this.config.startLeft;
+
+    const scrollMargin = 50;
+    const visibleLeft = this._scrollX;
+    const visibleRight = this._scrollX + editAreaWidth;
+
+    // Only jump if cursor is outside visible area
+    if (cursorInEditArea < visibleLeft + scrollMargin || cursorInEditArea > visibleRight - scrollMargin) {
+      // Center cursor in view (or near left edge if at start)
+      const targetScrollX = Math.max(0, cursorInEditArea - editAreaWidth / 3);
+      this.editAreaEl.scrollLeft = targetScrollX;
     }
   }
 
