@@ -64,6 +64,7 @@ export class Trakk extends HTMLElement {
     this.isPlaying = false;
     this._scrollX = 0;
     this._scrollY = 0;
+    this._selectedAction = null; // Currently selected action {action, row}
 
     // DOM refs
     this.timeAreaEl = null;
@@ -281,6 +282,58 @@ export class Trakk extends HTMLElement {
     this._syncEngineData();
     this.dispatchEvent(new CustomEvent('change', {
       detail: { tracks: this.tracks }
+    }));
+  }
+
+  /**
+   * Select an action (block)
+   * @param {Object|null} action - The action to select, or null to deselect
+   * @param {Object|null} row - The row containing the action
+   */
+  selectAction(action, row = null) {
+    // Remove previous selection
+    const prevSelected = this.querySelector('.timeline-editor-action.selected');
+    if (prevSelected) {
+      prevSelected.classList.remove('selected');
+    }
+
+    // Update state
+    const previousSelection = this._selectedAction;
+    this._selectedAction = action ? { action, row } : null;
+
+    // Add selection class to new action
+    if (action) {
+      const actionEl = this.querySelector(`[data-action-id="${action.id}"]`);
+      if (actionEl) {
+        actionEl.classList.add('selected');
+      }
+    }
+
+    // Emit select event
+    this._emitSelect(action, row);
+  }
+
+  /**
+   * Get the currently selected action
+   * @returns {Object|null} - The selected action and row, or null
+   */
+  getSelectedAction() {
+    return this._selectedAction;
+  }
+
+  /**
+   * Deselect any selected action
+   */
+  deselectAction() {
+    this.selectAction(null, null);
+  }
+
+  /**
+   * Emit select event
+   */
+  _emitSelect(action, row) {
+    this.dispatchEvent(new CustomEvent('select', {
+      detail: action ? { action, row } : null
     }));
   }
 
@@ -673,6 +726,14 @@ export class Trakk extends HTMLElement {
       this._syncTimeAreaScroll();
       this._syncLabelColumnScroll();
       this._updateCursorPosition();
+    });
+
+    // Click on edit area (not on action) deselects
+    editArea.addEventListener('click', (e) => {
+      // Only deselect if clicking directly on edit area or row, not on an action
+      if (this._selectedAction) {
+        this.deselectAction();
+      }
     });
 
     return editArea;
@@ -1073,8 +1134,23 @@ export class Trakk extends HTMLElement {
       actionEl.appendChild(deleteBtn);
     }
 
-    // Click event
+    // Select on mousedown (immediate feedback, only if track is not locked)
+    if (!row.locked) {
+      actionEl.addEventListener('mousedown', (e) => {
+        // Ignore if clicking on resize handles or delete button
+        if (e.target.classList.contains('timeline-editor-action-left-stretch') ||
+            e.target.classList.contains('timeline-editor-action-right-stretch') ||
+            e.target.classList.contains('timeline-editor-action-delete')) {
+          return;
+        }
+        this.selectAction(action, row);
+      });
+    }
+
+    // Click event (for callback only, selection handled in mousedown)
     actionEl.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent deselection from edit area click
+
       if (this.callbacks.onClickAction) {
         const rect = this.editAreaEl.getBoundingClientRect();
         // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion

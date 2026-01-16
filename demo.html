@@ -120,6 +120,19 @@
       margin-left: auto;
     }
 
+    .selection-display {
+      background-color: #0d0e0f;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      border: 1px solid rgba(82, 151, 255, 0.3);
+    }
+
+    .selection-display span {
+      color: #5297FF;
+      font-weight: 500;
+    }
+
     .timeline-container {
       height: 400px;
       width: 100%;
@@ -201,6 +214,9 @@
       </div>
       <div class="time-display">
         Time: <span id="timeDisplay">0.0</span> / <span id="totalTimeDisplay">0.0</span>s
+      </div>
+      <div class="selection-display" id="selectionDisplay">
+        Selected: <span id="selectedBlock">None</span>
       </div>
     </div>
 
@@ -470,6 +486,19 @@
     // Listen for item created
     timeline.addEventListener('itemcreated', (e) => {
       console.log('New item created:', e.detail.item, 'in row:', e.detail.row);
+    });
+
+    // Listen for selection changes
+    const selectedBlockEl = document.getElementById('selectedBlock');
+    timeline.addEventListener('select', (e) => {
+      if (e.detail) {
+        const { action, row } = e.detail;
+        selectedBlockEl.textContent = `${action.name || action.id} (${action.start.toFixed(1)}s - ${action.end.toFixed(1)}s)`;
+        console.log('Block selected:', action, 'in row:', row);
+      } else {
+        selectedBlockEl.textContent = 'None';
+        console.log('Selection cleared');
+      }
     });
   </script>
 </body>
