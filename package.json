@@ -1,0 +1,30 @@
+{
+  "name": "timeline-editor",
+  "version": "1.0.0",
+  "description": "A vanilla JavaScript timeline editor web component",
+  "type": "module",
+  "main": "dist/timeline.js",
+  "module": "dist/timeline.esm.js",
+  "style": "dist/timeline.css",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "rollup -c",
+    "build:css": "node scripts/build-css.js",
+    "dev": "rollup -c -w"
+  },
+  "keywords": [
+    "timeline",
+    "editor",
+    "web-component",
+    "vanilla-js"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "clean-css": "^5.3.3",
+    "rollup": "^4.9.0"
+  }
+}

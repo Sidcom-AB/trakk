@@ -672,6 +672,7 @@ export class TimelineEditor extends HTMLElement {
     input.className = 'timeline-editor-row-label-input';
     input.style.cssText = `
       flex: 1;
+      min-width: 0;
       background: transparent;
       border: none;
       border-bottom: 1px solid rgba(255,255,255,0.3);
@@ -679,7 +680,9 @@ export class TimelineEditor extends HTMLElement {
       font: inherit;
       outline: none;
       padding: 0;
+      margin: 0;
       user-select: text;
+      box-sizing: border-box;
     `;
 
     const finishEdit = () => {
