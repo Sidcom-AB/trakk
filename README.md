@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="trakk" width="500">
+  <img src="assets/logo.svg" alt="trakk" width="320">
 </p>
 
 <p align="center">
@@ -13,6 +13,10 @@
   <a href="#api">API</a> •
   <a href="#events">Events</a> •
   <a href="#demo">Demo</a>
+</p>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="trakk demo" width="700">
 </p>
 
 ---
