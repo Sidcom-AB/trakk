@@ -24,14 +24,14 @@ A timeline editor for building animation tools, video editors, audio sequencers,
 ## Installation
 
 ```bash
-npm install trakk
+npm install trakkjs
 ```
 
 Or use directly via CDN:
 
 ```html
-<script type="module" src="https://unpkg.com/trakk/dist/trakk.esm.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/trakk/dist/trakk.css">
+<script type="module" src="https://unpkg.com/trakkjs/dist/trakk.esm.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/trakkjs/dist/trakk.css">
 ```
 
 ## Usage
@@ -40,8 +40,8 @@ Or use directly via CDN:
 <trakk-editor id="timeline"></trakk-editor>
 
 <script type="module">
-  import { Trakk } from 'trakk';
-  import 'trakk/css';
+  import { Trakk } from 'trakkjs';
+  import 'trakkjs/css';
 
   const timeline = document.getElementById('timeline');
 
