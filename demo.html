@@ -347,10 +347,7 @@
       }
     ];
 
-    // Initialize timeline
-    timeline.setData(timelineData);
-
-    // Set up callbacks
+    // Set up callbacks BEFORE setData so renderers are available during initial render
     timeline.setCallbacks({
       // Action callbacks
       onActionMoveStart: ({ action, row }) => {
@@ -422,6 +419,9 @@
         return '';
       }
     });
+
+    // Initialize timeline data (after callbacks are set)
+    timeline.setData(timelineData);
 
     // Update time display
     timeline.engine.on('setTimeByTick', ({ time }) => {

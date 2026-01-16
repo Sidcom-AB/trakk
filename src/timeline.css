@@ -102,8 +102,10 @@
 
 /* Edit Row */
 .timeline-editor-edit-row {
+  --timeline-scale-width: 160px; /* fallback, overridden by JS */
   background-repeat: no-repeat, repeat;
   background-image: linear-gradient(#191b1d, #191b1d), linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 0);
+  background-size: var(--timeline-scale-width) 100%;
   display: flex;
   flex-direction: row;
   box-sizing: border-box;
@@ -116,7 +118,19 @@
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.timeline-editor-edit-row:hover {
+.timeline-editor-edit-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+  pointer-events: none;
+  transition: background-color 0.1s;
+}
+
+.timeline-editor-edit-row:hover::before {
   background-color: rgba(255, 255, 255, 0.02);
 }
 

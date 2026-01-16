@@ -26,10 +26,10 @@ export class TimelineEditor extends HTMLElement {
       scaleSplitCount: 10,
       startLeft: 120,
       contentPadding: 0,
-      minScaleCount: 20,
+      minScaleCount: 10,
       maxScaleCount: Infinity,
       rowHeight: 32,
-      autoScroll: false,
+      autoScroll: true,
       hideCursor: false,
       disableDrag: false,
       gridSnap: true,
@@ -295,6 +295,7 @@ export class TimelineEditor extends HTMLElement {
     // Set CSS custom properties for dynamic values
     this.style.setProperty('--timeline-start-left', `${this.config.startLeft}px`);
     this.style.setProperty('--timeline-content-padding', `${this.config.contentPadding}px`);
+    this.style.setProperty('--timeline-scale-width', `${this.config.scaleWidth}px`);
 
     // Spacer div to cover cursor line between time area and content
     const spacer = document.createElement('div');
@@ -594,8 +595,7 @@ export class TimelineEditor extends HTMLElement {
     rowEl.style.height = `${row.rowHeight || this.config.rowHeight}px`;
     rowEl.style.width = `${totalWidth}px`;
 
-    // Match background grid with major scale ticks, offset by contentPadding to align with time ruler
-    rowEl.style.backgroundSize = `${this.config.scaleWidth}px 100%`;
+    // Offset background grid by contentPadding to align with time ruler (size comes from CSS variable)
     rowEl.style.backgroundPosition = `${contentPadding}px 0`;
 
     rowEl.dataset.rowId = row.id;
@@ -604,12 +604,17 @@ export class TimelineEditor extends HTMLElement {
     // Click handler
     rowEl.addEventListener('click', (e) => {
       // Only if clicking directly on the row (not on an action)
-      if (e.target === rowEl && this.callbacks.onClickRow) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion
-        const x = e.clientX - rect.left + this._scrollX - contentPadding + this.config.startLeft;
-        const time = parserPixelToTime(x, this.config);
-        this.callbacks.onClickRow(e, { row, time });
+      if (e.target === rowEl) {
+        // Cancel any active editing when clicking empty track area
+        this._cancelActiveEditing();
+
+        if (this.callbacks.onClickRow) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion
+          const x = e.clientX - rect.left + this._scrollX - contentPadding + this.config.startLeft;
+          const time = parserPixelToTime(x, this.config);
+          this.callbacks.onClickRow(e, { row, time });
+        }
       }
     });
 
@@ -823,6 +828,20 @@ export class TimelineEditor extends HTMLElement {
   }
 
   /**
+   * Cancel any active block name editing by blurring input fields
+   */
+  _cancelActiveEditing() {
+    const activeInput = this.querySelector('.timeline-editor-block-name-input');
+    if (activeInput) {
+      activeInput.blur();
+    }
+    const activeLabelInput = this.querySelector('.timeline-editor-row-label-input');
+    if (activeLabelInput) {
+      activeLabelInput.blur();
+    }
+  }
+
+  /**
    * Handle drag start on empty row space to create new item
    */
   _handleRowDragStart(e, row, rowIndex) {
@@ -1026,6 +1045,37 @@ export class TimelineEditor extends HTMLElement {
     const left = parserTimeToPixel(this.cursorTime, this.config) + contentPadding;
     // Cursor position relative to viewport, accounting for scroll
     this.cursorEl.style.left = `${left - this._scrollX}px`;
+
+    // Auto-scroll to keep cursor visible
+    if (this.config.autoScroll && this.editAreaEl) {
+      this._autoScrollToCursor(left);
+    }
+  }
+
+  /**
+   * Auto-scroll edit area to keep cursor visible
+   */
+  _autoScrollToCursor(cursorLeft) {
+    const editAreaWidth = this.editAreaEl.clientWidth;
+    // Cursor position in edit area coordinates (subtract startLeft since edit area doesn't include label column)
+    const cursorInEditArea = cursorLeft - this.config.startLeft;
+
+    // Define margin - scroll when cursor is within this distance from right edge
+    const scrollMargin = 50;
+
+    // Check if cursor is outside visible area
+    const visibleLeft = this._scrollX;
+    const visibleRight = this._scrollX + editAreaWidth;
+
+    if (cursorInEditArea < visibleLeft + scrollMargin) {
+      // Cursor is too far left - scroll left
+      const newScrollX = Math.max(0, cursorInEditArea - scrollMargin);
+      this.editAreaEl.scrollLeft = newScrollX;
+    } else if (cursorInEditArea > visibleRight - scrollMargin) {
+      // Cursor is too far right - scroll right
+      const newScrollX = cursorInEditArea - editAreaWidth + scrollMargin;
+      this.editAreaEl.scrollLeft = newScrollX;
+    }
   }
 
   /**
@@ -1073,6 +1123,9 @@ export class TimelineEditor extends HTMLElement {
     e.preventDefault();
     e.stopPropagation();
 
+    // Cancel any active editing before starting drag
+    this._cancelActiveEditing();
+
     this.dragState.isDragging = true;
     this.dragState.isActuallyDragging = false;
     this.dragState.type = 'action-move';
@@ -1099,6 +1152,9 @@ export class TimelineEditor extends HTMLElement {
     if (this.isPlaying || this.config.disableDrag) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Cancel any active editing before starting resize
+    this._cancelActiveEditing();
 
     this.dragState.isDragging = true;
     this.dragState.isActuallyDragging = false;
