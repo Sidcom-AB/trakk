@@ -3,11 +3,11 @@ import terser from '@rollup/plugin-terser';
 export default [
   // UMD build (for script tags)
   {
-    input: 'src/timeline-editor.js',
+    input: 'src/trakk.js',
     output: {
-      file: 'dist/timeline.js',
+      file: 'dist/trakk.js',
       format: 'umd',
-      name: 'TimelineEditor',
+      name: 'Trakk',
       sourcemap: true
     },
     plugins: [
@@ -20,9 +20,9 @@ export default [
   },
   // ESM build (for bundlers)
   {
-    input: 'src/timeline-editor.js',
+    input: 'src/trakk.js',
     output: {
-      file: 'dist/timeline.esm.js',
+      file: 'dist/trakk.esm.js',
       format: 'esm',
       sourcemap: true
     },

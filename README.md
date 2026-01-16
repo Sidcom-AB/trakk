@@ -1,341 +1,207 @@
-# Timeline Editor - Vanilla JS
+<p align="center">
+  <img src="assets/logo.svg" alt="trakk" width="500">
+</p>
 
-A vanilla JavaScript web component version of the [React Timeline Editor](https://github.com/xzdarcy/react-timeline-editor), converted to work without any framework dependencies.
+<p align="center">
+  <strong>Lightweight timeline editor web component</strong><br>
+  Zero dependencies. Works everywhere.
+</p>
 
-## Features
+<p align="center">
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#api">API</a> •
+  <a href="#events">Events</a> •
+  <a href="#demo">Demo</a>
+</p>
 
-- **Web Component** - Uses native Custom Elements API
-- **Timeline Playback Engine** - Powerful animation timeline with effects system
-- **Interactive UI** - Drag & drop, resize items, movable cursor
-- **Click to Create** - Click on empty row space to create new timeline items
-- **2-Way Data Binding** - All changes immediately reflected in data
-- **Import/Export** - Save and load timeline data as JSON
-- **LocalStorage** - Persist timelines in browser storage
-- **Responsive** - Works with any container size
-- **No Dependencies** - Pure vanilla JavaScript, no React or other frameworks
-- **Event System** - Custom event emitter for animation callbacks
-- **Lightweight** - Minimal footprint compared to the React version
+---
 
-## Quick Start
+## What is it?
 
-1. Open `demo.html` in a modern browser
-2. Play with the timeline controls
-3. Drag actions, resize them, or add new ones
+A timeline editor for building animation tools, video editors, audio sequencers, or anything that needs time-based sequencing. Built as a native Web Component with zero dependencies.
+
+## Installation
+
+```bash
+npm install trakk
+```
+
+Or use directly via CDN:
+
+```html
+<script type="module" src="https://unpkg.com/trakk/dist/trakk.esm.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/trakk/dist/trakk.css">
+```
 
 ## Usage
 
-### Basic Setup
-
 ```html
-<!DOCTYPE html>
-<html>
-<head>
-  <link rel="stylesheet" href="src/timeline.css">
-</head>
-<body>
-  <timeline-editor id="timeline"></timeline-editor>
+<trakk-editor id="timeline"></trakk-editor>
 
-  <script type="module">
-    import { TimelineEditor } from './src/timeline-editor.js';
+<script type="module">
+  import { Trakk } from 'trakk';
+  import 'trakk/css';
 
-    const timeline = document.getElementById('timeline');
+  const timeline = document.getElementById('timeline');
 
-    // Define effects
-    const effects = {
-      'fade': {
-        id: 'fade',
-        name: 'Fade',
-        source: {
-          enter: ({ action, time }) => console.log('Enter', action.id),
-          update: ({ action, time }) => {
-            const progress = (time - action.start) / (action.end - action.start);
-            // Do something with progress
-          },
-          leave: ({ action, time }) => console.log('Leave', action.id)
-        }
-      }
-    };
+  timeline.setData([
+    {
+      id: 'track-1',
+      name: 'Audio',
+      blocks: [
+        { id: 'block-1', name: 'Intro', start: 0, end: 5 },
+        { id: 'block-2', name: 'Main', start: 6, end: 15 }
+      ]
+    },
+    {
+      id: 'track-2',
+      name: 'Video',
+      blocks: [
+        { id: 'block-3', name: 'Scene 1', start: 0, end: 10 }
+      ]
+    }
+  ]);
 
-    // Define timeline data
-    const editorData = [
-      {
-        id: 'row-1',
-        actions: [
-          {
-            id: 'action-1',
-            start: 0,
-            end: 5,
-            effectId: 'fade'
-          }
-        ]
-      }
-    ];
+  // Play/pause
+  timeline.play({ autoEnd: true });
+  timeline.pause();
 
-    // Initialize
-    timeline.setData(editorData, effects);
-  </script>
-</body>
-</html>
+  // Listen for changes
+  timeline.addEventListener('change', (e) => {
+    console.log('Updated:', e.detail.tracks);
+  });
+</script>
 ```
 
-### API
+## API
 
-#### Timeline Element Methods
+### Methods
 
-```javascript
-// Set timeline data
-timeline.setData(editorData, effects);
+| Method | Description |
+|--------|-------------|
+| `setData(tracks)` | Set timeline data |
+| `play(options?)` | Start playback. Options: `{ autoEnd: boolean, toTime: number }` |
+| `pause()` | Pause playback |
+| `setTime(time)` | Set current time position |
+| `getTime()` | Get current time |
+| `getTotalTime()` | Get total duration (end of last block) |
+| `setConfig(config)` | Update configuration |
+| `saveToLocalStorage(key?)` | Save to localStorage |
+| `loadFromLocalStorage(key?)` | Load from localStorage |
 
-// Get timeline data (2-way bound - reflects all changes)
-const data = timeline.getData(); // { editorData, effects }
-
-// Playback controls
-timeline.play({ autoEnd: true }); // Play with auto-end
-timeline.play({ toTime: 10 });    // Play to specific time
-timeline.pause();
-
-// Time controls
-timeline.setTime(5.0);  // Set current time
-const time = timeline.getTime();  // Get current time
-
-// Access engine directly
-timeline.engine.setPlayRate(2.0);  // 2x speed
-
-// Export/Import
-const json = timeline.exportJSON();  // Export as JSON string
-timeline.importJSON(json);           // Import from JSON string
-
-// LocalStorage persistence
-timeline.saveToLocalStorage();       // Save to browser storage
-timeline.loadFromLocalStorage();     // Load from browser storage
-timeline.saveToLocalStorage('my-timeline'); // Custom key
-```
-
-#### Effect Source Callbacks
-
-Each effect can define these callbacks:
+### Configuration
 
 ```javascript
-const effect = {
-  id: 'myEffect',
-  name: 'My Effect',
-  source: {
-    // Called when action enters timeline (time reaches action.start)
-    enter: ({ action, effect, time, isPlaying, engine }) => {},
-
-    // Called every frame while action is active
-    update: ({ action, effect, time, isPlaying, engine }) => {},
-
-    // Called when action leaves timeline (time passes action.end)
-    leave: ({ action, effect, time, isPlaying, engine }) => {},
-
-    // Called when playback starts (if action is active)
-    start: ({ action, effect, time, isPlaying, engine }) => {},
-
-    // Called when playback stops (if action is active)
-    stop: ({ action, effect, time, isPlaying, engine }) => {}
-  }
-};
-```
-
-#### Events
-
-```javascript
-// Listen for time changes during playback
-timeline.engine.on('setTimeByTick', ({ time }) => {
-  console.log('Current time:', time);
-});
-
-// Listen for play/pause
-timeline.engine.on('play', () => console.log('Playing'));
-timeline.engine.on('paused', () => console.log('Paused'));
-
-// Listen for data changes (drag, resize, etc.)
-timeline.addEventListener('change', (e) => {
-  console.log('Data changed:', e.detail.editorData);
-  // Auto-save example
-  timeline.saveToLocalStorage();
-});
-
-// Listen for new items created by clicking on rows
-timeline.addEventListener('itemcreated', (e) => {
-  console.log('New item:', e.detail.item);
-  console.log('In row:', e.detail.row);
-});
-```
-
-#### Callbacks
-
-The timeline supports comprehensive callbacks for user interaction events:
-
-```javascript
-timeline.setCallbacks({
-  // Action move callbacks
-  onActionMoveStart: ({ action, row }) => {
-    console.log('Started moving', action.id);
-  },
-  onActionMoving: ({ action, row, start, end }) => {
-    console.log('Moving to', start, '-', end);
-    return false; // Return false to cancel the move
-  },
-  onActionMoveEnd: ({ action, row }) => {
-    console.log('Finished moving', action.id);
-  },
-
-  // Action resize callbacks
-  onActionResizeStart: ({ action, row, direction }) => {
-    console.log('Started resizing', action.id, direction);
-  },
-  onActionResizing: ({ action, row, start, end }) => {
-    console.log('Resizing to', start, '-', end);
-    return false; // Return false to cancel the resize
-  },
-  onActionResizeEnd: ({ action, row }) => {
-    console.log('Finished resizing', action.id);
-  },
-
-  // Action interaction callbacks
-  onClickAction: (e, { action, row, time }) => {
-    console.log('Clicked action', action.id);
-  },
-  onDoubleClickAction: (e, { action, row, time }) => {
-    console.log('Double-clicked action', action.id);
-  },
-  onContextMenuAction: (e, { action, row, time }) => {
-    console.log('Right-clicked action', action.id);
-  },
-
-  // Row interaction callbacks
-  onClickRow: (e, { row, time }) => {
-    console.log('Clicked row', row.id);
-  },
-  onDoubleClickRow: (e, { row, time }) => {
-    console.log('Double-clicked row', row.id);
-  },
-  onContextMenuRow: (e, { row, time }) => {
-    console.log('Right-clicked row', row.id);
-  },
-
-  // Cursor callbacks
-  onCursorDragStart: (e, { time }) => {
-    console.log('Started dragging cursor');
-    return false; // Return false to cancel cursor drag
-  },
-  onCursorDrag: (e, { time }) => {
-    console.log('Dragging cursor to', time);
-    return false; // Return false to cancel cursor move
-  },
-  onCursorDragEnd: (e, { time }) => {
-    console.log('Finished dragging cursor');
-  },
-
-  // Time area callback
-  onClickTimeArea: (e, { time }) => {
-    console.log('Clicked time area at', time);
-    return false; // Return false to prevent cursor move
-  },
-
-  // Custom renderers
-  getActionRender: (action, row) => {
-    // Return HTML string or HTMLElement
-    return `<strong>${action.id}</strong>`;
-  },
-  getScaleRender: (scale) => {
-    // Return HTML string or HTMLElement
-    return scale.toFixed(1) + 's';
-  }
-});
-
-// Or set individual callbacks
-timeline.on('onClickAction', (e, { action }) => {
-  console.log('Action clicked:', action.id);
+timeline.setConfig({
+  scale: 1,              // Seconds per scale unit
+  scaleWidth: 160,       // Pixels per scale unit
+  scaleCount: 20,        // Number of scale units
+  startLeft: 100,        // Left margin (label column width)
+  rowHeight: 32,         // Track height in pixels
+  autoScroll: true,      // Auto-scroll during playback
+  hideCursor: false,     // Hide playhead cursor
+  disableDrag: false     // Disable all dragging
 });
 ```
 
 ### Data Structure
 
-#### EditorData (Array of Rows)
-```javascript
-[
-  {
-    id: 'row-1',           // Unique row ID
-    name: 'Track 1',       // Optional row label (displayed in left area)
-    actions: [...],        // Array of actions
-    rowHeight: 32          // Optional custom height
-  }
-]
-```
+```typescript
+interface Track {
+  id: string;
+  name?: string;
+  locked?: boolean;      // Prevent editing
+  blocks: Block[];
+}
 
-#### Action
-```javascript
-{
-  id: 'action-1',          // Unique action ID
-  start: 0,                // Start time
-  end: 5,                  // End time
-  effectId: 'effect1',     // Effect to use
-  flexible: true,          // Can resize (default: true)
-  movable: true,           // Can move (default: true)
-  disable: false,          // Disabled (default: false)
-  selected: false          // Selected state
+interface Block {
+  id: string;
+  name?: string;
+  start: number;         // Start time in seconds
+  end: number;           // End time in seconds
+  locked?: boolean;      // Prevent editing this block
 }
 ```
 
-## File Structure
-
-```
-timeline/
-├── src/
-│   ├── timeline-engine.js   # Core playback engine
-│   ├── timeline-editor.js   # Web component
-│   └── timeline.css         # Styles
-├── demo.html                # Demo page
-└── README.md
-```
-
-## Configuration
-
-The timeline can be configured by modifying the `config` object in the TimelineEditor constructor:
+## Events
 
 ```javascript
-config: {
-  scale: 1,              // Time per scale unit
-  scaleWidth: 160,       // Width of each scale unit (px)
-  scaleCount: 20,        // Number of scale units
-  scaleSplitCount: 10,   // Sub-divisions per scale
-  startLeft: 20,         // Left padding (px)
-  minScaleCount: 20,     // Minimum scale units
-  maxScaleCount: Infinity, // Maximum scale units
-  rowHeight: 32,         // Default row height (px)
-  autoScroll: false,     // Auto-scroll during drag
-  hideCursor: false,     // Hide the cursor
-  disableDrag: false,    // Disable all dragging
-  gridSnap: false        // Snap to grid (not implemented)
-}
+// Data changed (drag, resize, create, delete)
+timeline.addEventListener('change', (e) => {
+  console.log(e.detail.tracks);
+});
+
+// New block created via drag
+timeline.addEventListener('itemcreated', (e) => {
+  console.log(e.detail.item, e.detail.row);
+});
+
+// Block deleted
+timeline.addEventListener('blockdeleted', (e) => {
+  console.log(e.detail.block, e.detail.track);
+});
+
+// Track deleted
+timeline.addEventListener('trackdeleted', (e) => {
+  console.log(e.detail.track);
+});
+
+// Track/block renamed (double-click to edit)
+timeline.addEventListener('trackrenamed', (e) => {
+  console.log(e.detail.track, e.detail.name);
+});
+
+timeline.addEventListener('blockrenamed', (e) => {
+  console.log(e.detail.block, e.detail.name);
+});
 ```
 
-## Browser Support
+### Engine Events
 
-Requires a modern browser with support for:
-- Custom Elements (Web Components)
-- ES6 Modules
-- ES6 Classes
-- RequestAnimationFrame
+Access the playback engine directly:
 
-## Differences from React Version
+```javascript
+timeline.engine.on('play', () => console.log('Playing'));
+timeline.engine.on('paused', () => console.log('Paused'));
+timeline.engine.on('ended', () => console.log('Ended'));
 
-This vanilla JS version:
-- ✅ No React or framework dependencies
-- ✅ Simpler, more direct DOM manipulation
-- ✅ Smaller bundle size
-- ✅ Same core timeline engine
-- ⚠️ No virtualization (all rows rendered)
-- ⚠️ Simpler drag & drop (no interact.js)
-- ⚠️ No advanced features like control panels
+timeline.engine.on('setTimeByTick', ({ time }) => {
+  // Called every frame during playback
+  console.log('Current time:', time);
+});
+```
+
+## Callbacks
+
+For advanced control over interactions:
+
+```javascript
+timeline.setCallbacks({
+  // Custom rendering
+  getActionRender: (block, track) => `<b>${block.name}</b>`,
+  getScaleRender: (time) => `${time.toFixed(1)}s`,
+
+  // Interaction hooks (return false to cancel)
+  onActionMoving: ({ action, start, end }) => {
+    if (start < 0) return false; // Prevent moving before 0
+  },
+  onActionResizing: ({ action, start, end }) => {
+    if (end - start < 0.5) return false; // Minimum 0.5s duration
+  },
+
+  // Click handlers
+  onClickAction: (e, { action, row, time }) => {},
+  onDoubleClickAction: (e, { action, row }) => {},
+  onClickRow: (e, { row, time }) => {},
+  onClickTimeArea: (e, { time }) => {}
+});
+```
+
+## Demo
+
+Open `demo.html` in a browser or check out the [live demo](https://sidcom-ab.github.io/trakk).
 
 ## License
 
-MIT (same as original React Timeline Editor)
-
-## Credits
-
-Based on [xzdarcy/react-timeline-editor](https://github.com/xzdarcy/react-timeline-editor)
+MIT

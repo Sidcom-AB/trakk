@@ -1,5 +1,26 @@
-# Ignore temporary React timeline build files
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local config
+.mcp.json
+
+# Temporary files
 temp-react-timeline/
 .playwright-mcp/
-node_modules/
-dist/

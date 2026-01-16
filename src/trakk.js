@@ -1,4 +1,4 @@
-import { TimelineEngine } from './timeline-engine.js';
+import { TrakkEngine } from './trakk-engine.js';
 
 /**
  * Utility functions
@@ -12,9 +12,9 @@ const parserPixelToTime = (pixel, { startLeft, scale, scaleWidth }) => {
 };
 
 /**
- * Timeline Editor Web Component
+ * Trakk - Timeline Editor Web Component
  */
-export class TimelineEditor extends HTMLElement {
+export class Trakk extends HTMLElement {
   constructor() {
     super();
 
@@ -74,7 +74,7 @@ export class TimelineEditor extends HTMLElement {
     this.cursorEl = null;
 
     // Engine
-    this.engine = new TimelineEngine();
+    this.engine = new TrakkEngine();
 
     // Drag state
     this.dragState = {
@@ -282,6 +282,71 @@ export class TimelineEditor extends HTMLElement {
     this.dispatchEvent(new CustomEvent('change', {
       detail: { tracks: this.tracks }
     }));
+  }
+
+  /**
+   * Expand timeline if an action extends beyond current bounds
+   * @param {number} endTime - The end time to check against
+   * @returns {boolean} - Whether the timeline was expanded
+   */
+  _expandTimelineIfNeeded(endTime) {
+    // Add 2 scale units of margin beyond the end time
+    const marginScales = 2;
+    const requiredScales = Math.ceil(endTime / this.config.scale) + marginScales;
+
+    if (requiredScales > this.config.scaleCount) {
+      // Respect maxScaleCount limit
+      const newScaleCount = Math.min(requiredScales, this.config.maxScaleCount);
+      if (newScaleCount > this.config.scaleCount) {
+        this.config.scaleCount = newScaleCount;
+        this._updateTimelineWidth();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Update timeline width without full re-render (for dynamic expansion)
+   */
+  _updateTimelineWidth() {
+    const contentPadding = this.config.contentPadding;
+    const totalWidth = this.config.scaleCount * this.config.scaleWidth + contentPadding;
+
+    // Update rows container width
+    const rowsContainer = this.editAreaEl?.querySelector('.timeline-editor-rows');
+    if (rowsContainer) {
+      rowsContainer.style.width = `${totalWidth}px`;
+      rowsContainer.style.minWidth = `${totalWidth}px`;
+    }
+
+    // Update each row width
+    const rows = this.editAreaEl?.querySelectorAll('.timeline-editor-edit-row');
+    if (rows) {
+      rows.forEach(row => {
+        row.style.width = `${totalWidth}px`;
+      });
+    }
+
+    // Re-render time area to add new ticks
+    this._rerenderTimeArea();
+  }
+
+  /**
+   * Re-render time area (for dynamic expansion)
+   */
+  _rerenderTimeArea() {
+    if (!this.timeAreaEl) return;
+
+    // Create new time area content
+    const newTimeArea = this._createTimeArea();
+
+    // Replace old time area
+    this.timeAreaEl.replaceWith(newTimeArea);
+    this.timeAreaEl = newTimeArea;
+
+    // Restore scroll sync
+    this._syncTimeAreaScroll();
   }
 
   /**
@@ -720,7 +785,12 @@ export class TimelineEditor extends HTMLElement {
       box-sizing: border-box;
     `;
 
+    let editFinished = false;
     const finishEdit = () => {
+      // Prevent double execution
+      if (editFinished) return;
+      editFinished = true;
+
       const newName = input.value.trim();
       row.name = newName;
       labelText.textContent = newName;
@@ -816,9 +886,17 @@ export class TimelineEditor extends HTMLElement {
       user-select: text;
     `;
 
+    let editFinished = false;
     const finishEdit = () => {
+      // Prevent double execution
+      if (editFinished) return;
+      editFinished = true;
+
       const newName = input.value.trim();
       block.name = newName;
+
+      // Remove input and restore content
+      input.remove();
 
       // Update content display
       if (this.callbacks.getActionRender) {
@@ -1397,6 +1475,9 @@ export class TimelineEditor extends HTMLElement {
       newItem.end = startTime;
     }
 
+    // Expand timeline if item extends beyond current bounds
+    this._expandTimelineIfNeeded(newItem.end);
+
     // Update visual element (subtract startLeft since edit area starts at 0, add contentPadding)
     if (this.dragState.newItemEl) {
       const contentPadding = this.config.contentPadding;
@@ -1559,6 +1640,9 @@ export class TimelineEditor extends HTMLElement {
       action.start = startTime;
       action.end = startTime + duration;
 
+      // Expand timeline if action extends beyond current bounds
+      this._expandTimelineIfNeeded(action.end);
+
       this._updateActionElement(action, this.dragState.rowIndex);
     }
   }
@@ -1665,6 +1749,9 @@ export class TimelineEditor extends HTMLElement {
 
       action.end = Math.max(action.start + 0.1, endTime);
 
+      // Expand timeline if action extends beyond current bounds
+      this._expandTimelineIfNeeded(action.end);
+
       this._updateActionElement(action, this.dragState.rowIndex);
     }
   }
@@ -1691,6 +1778,6 @@ export class TimelineEditor extends HTMLElement {
 }
 
 // Register the custom element
-if (!customElements.get('timeline-editor')) {
-  customElements.define('timeline-editor', TimelineEditor);
+if (!customElements.get('trakk-editor')) {
+  customElements.define('trakk-editor', Trakk);
 }

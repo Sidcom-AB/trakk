@@ -1,5 +1,5 @@
 /**
- * Event Emitter for Timeline Engine
+ * Event Emitter for Trakk Engine
  */
 class EventEmitter {
   constructor() {
@@ -26,10 +26,10 @@ class EventEmitter {
 }
 
 /**
- * Timeline Engine - Core animation timeline player
+ * Trakk Engine - Core animation timeline player
  * Can run independently from the editor
  */
-export class TimelineEngine extends EventEmitter {
+export class TrakkEngine extends EventEmitter {
   constructor() {
     super();
 

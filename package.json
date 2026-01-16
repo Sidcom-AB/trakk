@@ -1,27 +1,60 @@
 {
-  "name": "timeline-editor",
+  "name": "trakk",
   "version": "1.0.0",
-  "description": "A vanilla JavaScript timeline editor web component",
+  "description": "Lightweight timeline editor web component for animations, video editing, and sequencing. Zero dependencies.",
   "type": "module",
-  "main": "dist/timeline.js",
-  "module": "dist/timeline.esm.js",
-  "style": "dist/timeline.css",
+  "main": "dist/trakk.js",
+  "module": "dist/trakk.esm.js",
+  "style": "dist/trakk.css",
+  "exports": {
+    ".": {
+      "import": "./dist/trakk.esm.js",
+      "require": "./dist/trakk.js"
+    },
+    "./css": "./dist/trakk.css"
+  },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "npm run build:js && npm run build:css",
     "build:js": "rollup -c",
     "build:css": "node scripts/build-css.js",
-    "dev": "rollup -c -w"
+    "dev": "rollup -c -w",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "timeline",
+    "timeline-editor",
     "editor",
     "web-component",
-    "vanilla-js"
+    "animation",
+    "video",
+    "video-editor",
+    "audio",
+    "sequencer",
+    "keyframe",
+    "track",
+    "clip",
+    "gantt",
+    "time",
+    "range",
+    "vanilla-js",
+    "no-dependencies",
+    "zero-dependencies",
+    "lightweight"
   ],
+  "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sidcom-AB/trakk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sidcom-AB/trakk/issues"
+  },
+  "homepage": "https://github.com/Sidcom-AB/trakk#readme",
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
     "clean-css": "^5.3.3",

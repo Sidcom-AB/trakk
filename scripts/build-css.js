@@ -6,8 +6,8 @@ import CleanCSS from 'clean-css';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const srcPath = path.join(__dirname, '../src/timeline.css');
-const distPath = path.join(__dirname, '../dist/timeline.css');
+const srcPath = path.join(__dirname, '../src/trakk.css');
+const distPath = path.join(__dirname, '../dist/trakk.css');
 
 // Ensure dist directory exists
 const distDir = path.dirname(distPath);

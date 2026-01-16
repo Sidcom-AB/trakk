@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Timeline Editor Demo</title>
-  <link rel="stylesheet" href="src/timeline.css">
+  <title>Trakk Demo</title>
+  <link rel="stylesheet" href="src/trakk.css">
   <style>
     * {
       margin: 0;
@@ -141,7 +141,7 @@
       pointer-events: none;
     }
 
-    timeline-editor {
+    trakk-editor {
       width: 100%;
       height: 100%;
     }
@@ -186,7 +186,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>Timeline Editor - Vanilla JS Demo</h1>
+    <h1>Trakk Demo</h1>
 
     <div class="controls">
       <button id="playBtn" class="primary">▶ Play</button>
@@ -205,38 +205,13 @@
     </div>
 
     <div class="timeline-container">
-      <timeline-editor id="timeline"></timeline-editor>
+      <trakk-editor id="timeline"></trakk-editor>
     </div>
 
-    <div class="info">
-      <h2>How to use:</h2>
-      <ul>
-        <li><strong>Play/Pause:</strong> Use the control buttons to start and stop timeline playback</li>
-        <li><strong>Move cursor:</strong> Click on the time ruler or drag the blue cursor line</li>
-        <li><strong>Create items:</strong> Click on empty space in any row to create a new timeline item</li>
-        <li><strong>Move items:</strong> Click and drag timeline blocks to move them in time</li>
-        <li><strong>Resize items:</strong> Drag the left or right edges of timeline blocks to resize them</li>
-        <li><strong>Scale slider:</strong> Adjust the scale to change time unit spacing (0.1s to 5s per unit)</li>
-        <li><strong>Add item button:</strong> Click "Add Item" to add a new item at current cursor time</li>
-        <li><strong>Save/Load:</strong> Save your timeline to browser storage or load previously saved timelines</li>
-        <li><strong>Export:</strong> Export timeline as JSON to console for backup or sharing</li>
-        <li><strong>Resize timeline:</strong> Drag the bottom-right corner of the timeline to resize it</li>
-      </ul>
-
-      <h2 style="margin-top: 20px;">Features:</h2>
-      <p>This is a vanilla JavaScript web component version of the React Timeline Editor. It includes:</p>
-      <ul>
-        <li>Timeline playback engine with effects system</li>
-        <li>Draggable and resizable action blocks</li>
-        <li>Interactive time cursor</li>
-        <li>Custom event system for animations</li>
-        <li>No React or framework dependencies</li>
-      </ul>
-    </div>
   </div>
 
   <script type="module">
-    import { TimelineEditor } from './src/timeline-editor.js';
+    import { Trakk } from './src/trakk.js';
 
     // Get timeline element
     const timeline = document.getElementById('timeline');
