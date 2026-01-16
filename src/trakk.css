@@ -2,7 +2,7 @@
 .timeline-editor {
   height: 100%;
   width: 100%;
-  min-height: 200px;
+  min-height: 100px;
   position: relative;
   font-size: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -68,9 +68,10 @@
 .timeline-editor-edit-area {
   flex: 1 1 0;
   margin-top: 0;
-  overflow: auto;
+  overflow-x: scroll;
+  overflow-y: auto;
   position: relative;
-  min-height: 0;
+  min-height: 48px; /* Ensure horizontal scrollbar is always visible (row height + scrollbar) */
   min-width: 0;
   height: 100%;
   width: 0;
