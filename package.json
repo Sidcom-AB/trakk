@@ -1,5 +1,5 @@
 {
-  "name": "trakkjs",
+  "name": "@andymcloid/trakk",
   "version": "1.0.0",
   "description": "Lightweight timeline editor web component for animations, video editing, and sequencing. Zero dependencies.",
   "type": "module",
