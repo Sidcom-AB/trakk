@@ -33,7 +33,8 @@ export class Trakk extends HTMLElement {
       hideCursor: false,
       disableDrag: false,
       gridSnap: true,
-      grid: 1
+      grid: 1,
+      allowOverlap: false
     };
 
     // Callback functions
@@ -335,6 +336,113 @@ export class Trakk extends HTMLElement {
     this.dispatchEvent(new CustomEvent('select', {
       detail: action ? { action, row } : null
     }));
+  }
+
+  /**
+   * Check if a time range would overlap with other actions in the same row
+   * @param {Object} row - The row to check
+   * @param {string} actionId - The action being moved/resized (to exclude from check)
+   * @param {number} start - Proposed start time
+   * @param {number} end - Proposed end time
+   * @returns {boolean} - True if there would be an overlap
+   */
+  _wouldOverlap(row, actionId, start, end) {
+    if (!row.blocks) return false;
+
+    for (const block of row.blocks) {
+      // Skip the action being moved/resized
+      if (block.id === actionId) continue;
+
+      // Check for overlap: ranges overlap if start1 < end2 AND end1 > start2
+      if (start < block.end && end > block.start) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Get valid (non-overlapping) position for an action
+   * @param {Object} row - The row containing the action
+   * @param {string} actionId - The action being moved/resized
+   * @param {number} proposedStart - Proposed start time
+   * @param {number} proposedEnd - Proposed end time
+   * @param {string} mode - 'move' or 'resize-left' or 'resize-right'
+   * @returns {{start: number, end: number}} - Valid start and end times
+   */
+  _getValidPosition(row, actionId, proposedStart, proposedEnd, mode = 'move') {
+    // If overlap is allowed, just return proposed values
+    if (this.config.allowOverlap) {
+      return { start: proposedStart, end: proposedEnd };
+    }
+
+    const duration = proposedEnd - proposedStart;
+
+    // If no overlap, return proposed values
+    if (!this._wouldOverlap(row, actionId, proposedStart, proposedEnd)) {
+      return { start: proposedStart, end: proposedEnd };
+    }
+
+    // Find the blocking actions
+    const otherBlocks = (row.blocks || [])
+      .filter(b => b.id !== actionId)
+      .sort((a, b) => a.start - b.start);
+
+    if (mode === 'move') {
+      // For move: find the closest valid position
+      let bestStart = proposedStart;
+      let bestEnd = proposedEnd;
+      let minDistance = Infinity;
+
+      // Try snapping to left edge of each blocking action
+      for (const block of otherBlocks) {
+        // Try placing before this block
+        const candidateEnd = block.start;
+        const candidateStart = candidateEnd - duration;
+        if (candidateStart >= 0 && !this._wouldOverlap(row, actionId, candidateStart, candidateEnd)) {
+          const distance = Math.abs(proposedStart - candidateStart);
+          if (distance < minDistance) {
+            minDistance = distance;
+            bestStart = candidateStart;
+            bestEnd = candidateEnd;
+          }
+        }
+
+        // Try placing after this block
+        const candidateStart2 = block.end;
+        const candidateEnd2 = candidateStart2 + duration;
+        if (!this._wouldOverlap(row, actionId, candidateStart2, candidateEnd2)) {
+          const distance = Math.abs(proposedStart - candidateStart2);
+          if (distance < minDistance) {
+            minDistance = distance;
+            bestStart = candidateStart2;
+            bestEnd = candidateEnd2;
+          }
+        }
+      }
+
+      return { start: bestStart, end: bestEnd };
+    } else if (mode === 'resize-left') {
+      // For resize-left: find the maximum start we can have
+      let maxStart = proposedStart;
+      for (const block of otherBlocks) {
+        if (block.end > proposedStart && block.end <= proposedEnd) {
+          maxStart = Math.max(maxStart, block.end);
+        }
+      }
+      return { start: maxStart, end: proposedEnd };
+    } else if (mode === 'resize-right') {
+      // For resize-right: find the minimum end we can have
+      let minEnd = proposedEnd;
+      for (const block of otherBlocks) {
+        if (block.start < proposedEnd && block.start >= proposedStart) {
+          minEnd = Math.min(minEnd, block.start);
+        }
+      }
+      return { start: proposedStart, end: minEnd };
+    }
+
+    return { start: proposedStart, end: proposedEnd };
   }
 
   /**
@@ -1699,8 +1807,14 @@ export class Trakk extends HTMLElement {
       this.dragState.currentLeft = newLeft;
       this.dragState.deltaX = this.dragState.deltaX % grid;
 
-      const startTime = parserPixelToTime(newLeft, this.config);
       const duration = action.end - action.start;
+      let startTime = parserPixelToTime(newLeft, this.config);
+      let endTime = startTime + duration;
+
+      // Check for overlap and get valid position
+      const validPos = this._getValidPosition(row, action.id, startTime, endTime, 'move');
+      startTime = validPos.start;
+      endTime = validPos.end;
 
       // Callback
       if (this.callbacks.onActionMoving) {
@@ -1708,13 +1822,13 @@ export class Trakk extends HTMLElement {
           action,
           row,
           start: startTime,
-          end: startTime + duration
+          end: endTime
         });
         if (result === false) return;
       }
 
       action.start = startTime;
-      action.end = startTime + duration;
+      action.end = endTime;
 
       // Expand timeline if action extends beyond current bounds
       this._expandTimelineIfNeeded(action.end);
@@ -1759,20 +1873,25 @@ export class Trakk extends HTMLElement {
       this.dragState.currentWidth = newWidth;
       this.dragState.deltaX = this.dragState.deltaX % grid;
 
-      const startTime = parserPixelToTime(newLeft, this.config);
+      let startTime = Math.max(0, parserPixelToTime(newLeft, this.config));
+      const endTime = action.end;
+
+      // Check for overlap and get valid position
+      const validPos = this._getValidPosition(row, action.id, startTime, endTime, 'resize-left');
+      startTime = validPos.start;
 
       // Callback
       if (this.callbacks.onActionResizing) {
         const result = this.callbacks.onActionResizing({
           action,
           row,
-          start: Math.max(0, startTime),
-          end: action.end
+          start: startTime,
+          end: endTime
         });
         if (result === false) return;
       }
 
-      action.start = Math.max(0, startTime);
+      action.start = startTime;
 
       this._updateActionElement(action, this.dragState.rowIndex);
     }
@@ -1810,20 +1929,25 @@ export class Trakk extends HTMLElement {
       this.dragState.deltaX = this.dragState.deltaX % grid;
 
       const endPixel = this.dragState.currentLeft + newWidth;
-      const endTime = parserPixelToTime(endPixel, this.config);
+      const startTime = action.start;
+      let endTime = Math.max(startTime + 0.1, parserPixelToTime(endPixel, this.config));
+
+      // Check for overlap and get valid position
+      const validPos = this._getValidPosition(row, action.id, startTime, endTime, 'resize-right');
+      endTime = validPos.end;
 
       // Callback
       if (this.callbacks.onActionResizing) {
         const result = this.callbacks.onActionResizing({
           action,
           row,
-          start: action.start,
-          end: Math.max(action.start + 0.1, endTime)
+          start: startTime,
+          end: endTime
         });
         if (result === false) return;
       }
 
-      action.end = Math.max(action.start + 0.1, endTime);
+      action.end = endTime;
 
       // Expand timeline if action extends beyond current bounds
       this._expandTimelineIfNeeded(action.end);

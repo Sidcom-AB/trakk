@@ -91,6 +91,9 @@ Or use directly via CDN:
 | `getTime()` | Get current time |
 | `getTotalTime()` | Get total duration (end of last block) |
 | `setConfig(config)` | Update configuration |
+| `selectAction(action, row?)` | Select a block programmatically |
+| `deselectAction()` | Clear the current selection |
+| `getSelectedAction()` | Get currently selected block `{ action, row }` or `null` |
 | `saveToLocalStorage(key?)` | Save to localStorage |
 | `loadFromLocalStorage(key?)` | Load from localStorage |
 
@@ -105,7 +108,8 @@ timeline.setConfig({
   rowHeight: 32,         // Track height in pixels
   autoScroll: true,      // Auto-scroll during playback
   hideCursor: false,     // Hide playhead cursor
-  disableDrag: false     // Disable all dragging
+  disableDrag: false,    // Disable all dragging
+  allowOverlap: false    // Allow blocks to overlap (default: false)
 });
 ```
 
@@ -149,6 +153,15 @@ timeline.addEventListener('blockdeleted', (e) => {
 // Track deleted
 timeline.addEventListener('trackdeleted', (e) => {
   console.log(e.detail.track);
+});
+
+// Block selected/deselected
+timeline.addEventListener('select', (e) => {
+  if (e.detail) {
+    console.log('Selected:', e.detail.action, 'in track:', e.detail.row);
+  } else {
+    console.log('Selection cleared');
+  }
 });
 
 // Track/block renamed (double-click to edit)

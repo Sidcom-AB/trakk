@@ -206,6 +206,7 @@
       <button id="pauseBtn">⏸ Pause</button>
       <button id="resetBtn">⏮ Reset</button>
       <button id="addTrackBtn">+ Add Track</button>
+      <button id="toggleOverlapBtn">Overlap: OFF</button>
       <button id="saveBtn">Save</button>
       <button id="loadBtn">Load</button>
       <div class="slider-control">
@@ -475,6 +476,15 @@
     document.getElementById('loadBtn').addEventListener('click', () => {
       const loaded = timeline.loadFromLocalStorage();
       console.log(loaded ? 'Timeline loaded' : 'No saved timeline found');
+    });
+
+    // Toggle overlap button
+    const toggleOverlapBtn = document.getElementById('toggleOverlapBtn');
+    toggleOverlapBtn.addEventListener('click', () => {
+      const newAllowOverlap = !timeline.config.allowOverlap;
+      timeline.setConfig({ allowOverlap: newAllowOverlap });
+      toggleOverlapBtn.textContent = `Overlap: ${newAllowOverlap ? 'ON' : 'OFF'}`;
+      console.log('Allow overlap:', newAllowOverlap);
     });
 
     // Listen for changes
