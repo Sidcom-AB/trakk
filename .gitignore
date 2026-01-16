@@ -1,2 +1,3 @@
 # Ignore temporary React timeline build files
-temp-react-timeline/*
+temp-react-timeline/
+.playwright-mcp/

@@ -22,6 +22,7 @@
   flex: 0 0 auto;
   background-color: #191b1d;
   overflow: hidden;
+  z-index: 150;
 }
 
 .timeline-editor-time-area-wrapper {
@@ -65,10 +66,14 @@
 
 /* Edit Area */
 .timeline-editor-edit-area {
-  flex: 1 1 auto;
-  margin-top: 10px;
+  flex: 1 1 0;
+  margin-top: 0;
   overflow: auto;
   position: relative;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 0;
 }
 
 .timeline-editor-rows {

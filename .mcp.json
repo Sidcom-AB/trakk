@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@0.0.41"],
+      "env": {
+        "PLAYWRIGHT_SCREENSHOT_TYPE": "jpeg"
+      }
+    }
+  }
+}

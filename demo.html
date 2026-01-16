@@ -404,8 +404,8 @@
 
       // Custom renderers
       getScaleRender: (scale) => {
-        // Custom time scale rendering
-        return scale.toFixed(1) + 's';
+        // Custom time scale rendering - first tick shows "0s", others show decimal
+        return scale === 0 ? '0s' : scale.toFixed(1) + 's';
       },
       getActionRender: (action, row) => {
         // Custom action content rendering
