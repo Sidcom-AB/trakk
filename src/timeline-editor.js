@@ -238,6 +238,22 @@ export class TimelineEditor extends HTMLElement {
   }
 
   /**
+   * Get total time (end time of the last block across all tracks)
+   */
+  getTotalTime() {
+    let maxEnd = 0;
+    for (const track of this.tracks) {
+      const blocks = track.blocks || track.items || track.actions || [];
+      for (const block of blocks) {
+        if (block.end > maxEnd) {
+          maxEnd = block.end;
+        }
+      }
+    }
+    return maxEnd;
+  }
+
+  /**
    * Play timeline
    */
   play(options = {}) {
@@ -249,6 +265,23 @@ export class TimelineEditor extends HTMLElement {
    */
   pause() {
     this.engine.pause();
+  }
+
+  /**
+   * Sync engine data with current tracks (call after modifying tracks)
+   */
+  _syncEngineData() {
+    this.engine.data = this.tracks;
+  }
+
+  /**
+   * Emit change event and sync engine
+   */
+  _emitChange() {
+    this._syncEngineData();
+    this.dispatchEvent(new CustomEvent('change', {
+      detail: { tracks: this.tracks }
+    }));
   }
 
   /**
@@ -267,12 +300,12 @@ export class TimelineEditor extends HTMLElement {
 
     this.engine.on('setTimeByTick', ({ time }) => {
       this.cursorTime = time;
-      this._updateCursorPosition();
+      this._updateCursorPosition(true); // Auto-scroll during playback
     });
 
     this.engine.on('afterSetTime', ({ time }) => {
       this.cursorTime = time;
-      this._updateCursorPosition();
+      this._updateCursorPosition(false); // No auto-scroll for manual time set
     });
   }
 
@@ -693,9 +726,7 @@ export class TimelineEditor extends HTMLElement {
       input.remove();
 
       // Emit change event
-      this.dispatchEvent(new CustomEvent('change', {
-        detail: { tracks: this.tracks }
-      }));
+      this._emitChange();
       this.dispatchEvent(new CustomEvent('trackrenamed', {
         detail: { track: row, name: newName }
       }));
@@ -732,9 +763,7 @@ export class TimelineEditor extends HTMLElement {
     this.render();
 
     // Emit events
-    this.dispatchEvent(new CustomEvent('change', {
-      detail: { tracks: this.tracks }
-    }));
+    this._emitChange();
     this.dispatchEvent(new CustomEvent('trackdeleted', {
       detail: { track: row }
     }));
@@ -754,9 +783,7 @@ export class TimelineEditor extends HTMLElement {
     this.render();
 
     // Emit events
-    this.dispatchEvent(new CustomEvent('change', {
-      detail: { tracks: this.tracks }
-    }));
+    this._emitChange();
     this.dispatchEvent(new CustomEvent('blockdeleted', {
       detail: { block, track: row }
     }));
@@ -802,9 +829,7 @@ export class TimelineEditor extends HTMLElement {
       }
 
       // Emit change event
-      this.dispatchEvent(new CustomEvent('change', {
-        detail: { tracks: this.tracks }
-      }));
+      this._emitChange();
       this.dispatchEvent(new CustomEvent('blockrenamed', {
         detail: { block, track: row, name: newName }
       }));
@@ -1038,8 +1063,9 @@ export class TimelineEditor extends HTMLElement {
 
   /**
    * Update cursor position
+   * @param {boolean} shouldAutoScroll - Whether to auto-scroll to keep cursor visible (only during playback/drag)
    */
-  _updateCursorPosition() {
+  _updateCursorPosition(shouldAutoScroll = false) {
     if (!this.cursorEl) return;
     const contentPadding = this.config.contentPadding;
     // parserTimeToPixel includes startLeft, which now represents the label column width
@@ -1049,8 +1075,8 @@ export class TimelineEditor extends HTMLElement {
     // Cursor position relative to viewport, accounting for scroll
     this.cursorEl.style.left = `${left - this._scrollX}px`;
 
-    // Auto-scroll to keep cursor visible
-    if (this.config.autoScroll && this.editAreaEl) {
+    // Auto-scroll to keep cursor visible (only when explicitly requested, e.g. during playback)
+    if (shouldAutoScroll && this.config.autoScroll && this.editAreaEl) {
       this._autoScrollToCursor(left);
     }
   }
@@ -1063,21 +1089,30 @@ export class TimelineEditor extends HTMLElement {
     // Cursor position in edit area coordinates (subtract startLeft since edit area doesn't include label column)
     const cursorInEditArea = cursorLeft - this.config.startLeft;
 
-    // Define margin - scroll when cursor is within this distance from right edge
+    // Define margin - scroll when cursor is within this distance from edge
     const scrollMargin = 50;
+    // Maximum scroll step per update for smooth scrolling
+    const maxScrollStep = 8;
 
     // Check if cursor is outside visible area
     const visibleLeft = this._scrollX;
     const visibleRight = this._scrollX + editAreaWidth;
 
+    let targetScrollX = null;
+
     if (cursorInEditArea < visibleLeft + scrollMargin) {
       // Cursor is too far left - scroll left
-      const newScrollX = Math.max(0, cursorInEditArea - scrollMargin);
-      this.editAreaEl.scrollLeft = newScrollX;
+      targetScrollX = Math.max(0, cursorInEditArea - scrollMargin);
     } else if (cursorInEditArea > visibleRight - scrollMargin) {
       // Cursor is too far right - scroll right
-      const newScrollX = cursorInEditArea - editAreaWidth + scrollMargin;
-      this.editAreaEl.scrollLeft = newScrollX;
+      targetScrollX = cursorInEditArea - editAreaWidth + scrollMargin;
+    }
+
+    if (targetScrollX !== null) {
+      // Smooth scroll: move gradually towards target instead of jumping
+      const delta = targetScrollX - this._scrollX;
+      const step = Math.sign(delta) * Math.min(Math.abs(delta), maxScrollStep);
+      this.editAreaEl.scrollLeft = this._scrollX + step;
     }
   }
 
@@ -1376,9 +1411,7 @@ export class TimelineEditor extends HTMLElement {
         }
 
         // Emit events
-        this.dispatchEvent(new CustomEvent('change', {
-          detail: { tracks: this.tracks }
-        }));
+        this._emitChange();
         this.dispatchEvent(new CustomEvent('itemcreated', {
           detail: { item: newItem, row: row }
         }));
@@ -1386,9 +1419,7 @@ export class TimelineEditor extends HTMLElement {
 
       if (dragType && dragType.startsWith('action-')) {
         // Emit change event only if we actually moved/resized
-        this.dispatchEvent(new CustomEvent('change', {
-          detail: { tracks: this.tracks }
-        }));
+        this._emitChange();
       }
     } else if (dragType === 'item-create' && this.dragState.newItem) {
       // User didn't drag enough - remove the item
@@ -1445,7 +1476,7 @@ export class TimelineEditor extends HTMLElement {
     const contentPadding = this.config.contentPadding;
     // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion
     const x = e.clientX - rect.left + this._scrollX - contentPadding + this.config.startLeft;
-    const time = parserPixelToTime(x, this.config);
+    const time = Math.max(0, parserPixelToTime(x, this.config));
 
     // Callback
     if (this.callbacks.onCursorDrag) {
@@ -1453,7 +1484,10 @@ export class TimelineEditor extends HTMLElement {
       if (result === false) return;
     }
 
-    this.setTime(Math.max(0, time));
+    // Update time and cursor with auto-scroll during drag
+    this.cursorTime = time;
+    this.engine.setTime(time);
+    this._updateCursorPosition(true);
   }
 
   /**
