@@ -1264,7 +1264,7 @@ export class Trakk extends HTMLElement {
         // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion
         const x = e.clientX - rect.left + this._scrollX - contentPadding + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
-        this.callbacks.onClickAction(e, { action, row, time });
+        this.callbacks.onClickAction(e, { action, row, time, button: e.button });
       }
     });
 
@@ -1288,7 +1288,7 @@ export class Trakk extends HTMLElement {
       }
     });
 
-    // Context menu event
+    // Context menu event (right-click)
     actionEl.addEventListener('contextmenu', (e) => {
       if (this.callbacks.onContextMenuAction) {
         e.preventDefault();
@@ -1296,7 +1296,7 @@ export class Trakk extends HTMLElement {
         // Edit area starts at 0, account for contentPadding, add startLeft for correct time conversion
         const x = e.clientX - rect.left + this._scrollX - contentPadding + this.config.startLeft;
         const time = parserPixelToTime(x, this.config);
-        this.callbacks.onContextMenuAction(e, { action, row, time });
+        this.callbacks.onContextMenuAction(e, { action, row, time, button: e.button });
       }
     });
 

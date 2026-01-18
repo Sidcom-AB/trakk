@@ -207,9 +207,12 @@ timeline.setCallbacks({
     if (end - start < 0.5) return false; // Minimum 0.5s duration
   },
 
-  // Click handlers
-  onClickAction: (e, { action, row, time }) => {},
-  onDoubleClickAction: (e, { action, row }) => {},
+  // Click handlers (button: 0=left, 1=middle, 2=right)
+  onClickAction: (e, { action, row, time, button }) => {},
+  onDoubleClickAction: (e, { action, row, time }) => {},
+  onContextMenuAction: (e, { action, row, time, button }) => {
+    // Right-click on block - show custom context menu
+  },
   onClickRow: (e, { row, time }) => {},
   onClickTimeArea: (e, { time }) => {}
 });
