@@ -561,28 +561,11 @@ export class Trakk extends HTMLElement {
     // Spacer div to cover cursor line between time area and content
     const spacer = document.createElement('div');
     spacer.className = 'timeline-editor-spacer';
-    spacer.style.cssText = `
-      height: 10px;
-      width: calc(var(--timeline-start-left) - 4px);
-      background-color: #191b1d;
-      flex-shrink: 0;
-      position: relative;
-      z-index: 101;
-    `;
     this.appendChild(spacer);
 
     // Main content wrapper (labels + edit area side by side)
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'timeline-editor-content';
-    contentWrapper.style.cssText = `
-      display: flex;
-      flex: 1 1 0;
-      overflow: hidden;
-      position: relative;
-      min-height: 0;
-      min-width: 0;
-      height: 0;
-    `;
 
     // Frozen label column
     this.labelColumnEl = this._createLabelColumn();
@@ -701,15 +684,6 @@ export class Trakk extends HTMLElement {
   _createLabelColumn() {
     const labelColumn = document.createElement('div');
     labelColumn.className = 'timeline-editor-label-column';
-    labelColumn.style.cssText = `
-      width: ${this.config.startLeft}px;
-      flex-shrink: 0;
-      overflow: hidden;
-      background-color: #191b1d;
-      border-right: 1px solid rgba(255, 255, 255, 0.1);
-      z-index: 200;
-      position: relative;
-    `;
 
     // Inner container that will be transformed for scroll sync
     const labelInner = document.createElement('div');
@@ -731,22 +705,8 @@ export class Trakk extends HTMLElement {
   _createLabelRow(row, rowIndex) {
     const labelRow = document.createElement('div');
     labelRow.className = 'timeline-editor-label-row';
-    labelRow.style.cssText = `
-      height: ${row.rowHeight || this.config.rowHeight}px;
-      display: flex;
-      align-items: center;
-      padding: 0 8px;
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 12px;
-      font-weight: 500;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      box-sizing: border-box;
-      position: relative;
-    `;
-
-    if (rowIndex === 0) {
-      labelRow.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
-    }
+    // Only height is dynamic (can be per-row)
+    labelRow.style.height = `${row.rowHeight || this.config.rowHeight}px`;
 
     labelRow.dataset.rowId = row.id;
     labelRow.dataset.rowIndex = rowIndex;
@@ -755,12 +715,6 @@ export class Trakk extends HTMLElement {
     const labelText = document.createElement('span');
     labelText.className = 'timeline-editor-label-text';
     labelText.textContent = row.name || '';
-    labelText.style.cssText = `
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    `;
     labelRow.appendChild(labelText);
 
     // Make label editable on dblclick (unless locked)
@@ -776,15 +730,6 @@ export class Trakk extends HTMLElement {
     if (row.locked) {
       const lockIcon = document.createElement('span');
       lockIcon.className = 'timeline-editor-lock-icon';
-      lockIcon.style.cssText = `
-        width: 10px;
-        height: 10px;
-        margin-left: 6px;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='rgba(255,255,255,0.4)'%3E%3Cpath d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z'/%3E%3C/svg%3E");
-        background-size: contain;
-        background-repeat: no-repeat;
-        flex-shrink: 0;
-      `;
       labelRow.appendChild(lockIcon);
     }
 
@@ -939,20 +884,6 @@ export class Trakk extends HTMLElement {
     input.type = 'text';
     input.value = currentName;
     input.className = 'timeline-editor-row-label-input';
-    input.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid rgba(255,255,255,0.3);
-      color: inherit;
-      font: inherit;
-      outline: none;
-      padding: 0;
-      margin: 0;
-      user-select: text;
-      box-sizing: border-box;
-    `;
 
     let editFinished = false;
     const finishEdit = () => {
@@ -1042,18 +973,6 @@ export class Trakk extends HTMLElement {
     input.type = 'text';
     input.value = currentName;
     input.className = 'timeline-editor-block-name-input';
-    input.style.cssText = `
-      width: 100%;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid rgba(255,255,255,0.3);
-      color: inherit;
-      font: inherit;
-      outline: none;
-      padding: 0;
-      text-align: center;
-      user-select: text;
-    `;
 
     let editFinished = false;
     const finishEdit = () => {
