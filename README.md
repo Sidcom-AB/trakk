@@ -12,6 +12,7 @@
   <a href="#usage">Usage</a> •
   <a href="#api">API</a> •
   <a href="#events">Events</a> •
+  <a href="#styling">Styling</a> •
   <a href="#demo">Demo</a>
 </p>
 
@@ -216,6 +217,54 @@ timeline.setCallbacks({
   onClickRow: (e, { row, time }) => {},
   onClickTimeArea: (e, { time }) => {}
 });
+```
+
+## Styling
+
+Customize Trakk's appearance using CSS custom properties:
+
+```css
+trakk-editor {
+  /* Core colors */
+  --trakk-bg: #191b1d;           /* Background color */
+  --trakk-text: #ffffff;         /* Text color */
+  --trakk-accent: #5297FF;       /* Accent color (cursor, selection border) */
+
+  /* Block colors */
+  --trakk-block-bg: #2f3134;           /* Block background */
+  --trakk-block-bg-hover: #3a3d40;     /* Block hover state */
+  --trakk-block-bg-selected: #4a7ba7;  /* Selected block background */
+
+  /* Borders */
+  --trakk-border: rgba(255, 255, 255, 0.1);        /* Subtle borders */
+  --trakk-border-strong: rgba(255, 255, 255, 0.3); /* Prominent borders */
+
+  /* Text variations */
+  --trakk-text-muted: rgba(255, 255, 255, 0.6);  /* Secondary text */
+  --trakk-text-subtle: rgba(255, 255, 255, 0.4); /* Subtle text/icons */
+
+  /* State */
+  --trakk-danger: #ff6464;       /* Delete button hover */
+  --trakk-disabled-opacity: 0.6; /* Disabled elements */
+  --trakk-locked-opacity: 0.7;   /* Locked elements */
+}
+```
+
+### Light Theme Example
+
+```css
+trakk-editor.light {
+  --trakk-bg: #f5f5f5;
+  --trakk-text: #1a1a1a;
+  --trakk-accent: #0066cc;
+  --trakk-block-bg: #e0e0e0;
+  --trakk-block-bg-hover: #d0d0d0;
+  --trakk-block-bg-selected: #b3d4fc;
+  --trakk-border: rgba(0, 0, 0, 0.1);
+  --trakk-border-strong: rgba(0, 0, 0, 0.2);
+  --trakk-text-muted: rgba(0, 0, 0, 0.6);
+  --trakk-text-subtle: rgba(0, 0, 0, 0.4);
+}
 ```
 
 ## Demo
