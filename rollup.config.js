@@ -8,7 +8,7 @@ export default [
       file: 'dist/trakk.js',
       format: 'umd',
       name: 'Trakk',
-      sourcemap: true
+      sourcemap: false
     },
     plugins: [
       terser({
@@ -24,7 +24,7 @@ export default [
     output: {
       file: 'dist/trakk.esm.js',
       format: 'esm',
-      sourcemap: true
+      sourcemap: false
     },
     plugins: [
       terser({
